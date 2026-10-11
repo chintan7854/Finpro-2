@@ -1,0 +1,6 @@
+{
+  "name": "FinAdvisor Pro - Marketing & Education Platform",
+  "description": "Mobile-first SaaS platform for financial advisors: personalized marketing content, multi-language client education, WhatsApp status, articles, and personal branding tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
