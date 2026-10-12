@@ -22,6 +22,7 @@ import { LeadGenerationView } from './components/leads/LeadGenerationView';
 import { LeadGenProvider } from './context/LeadGenContext';
 import { MindsetSimulatorsView } from './components/MindsetSimulatorsView';
 import { StoryStudioView } from './components/storyStudio/StoryStudioView';
+import { PresentationStudioView } from './components/presentationStudio/PresentationStudioView';
 import { FinancialSubjectId, GeneratedContent } from './types';
 
 function MainApp() {
@@ -113,6 +114,8 @@ function MainApp() {
           )}
 
           {currentView === 'simulators' && <MindsetSimulatorsView />}
+
+          {currentView === 'presentation-studio' && <PresentationStudioView />}
 
           {currentView === 'story-studio' && <StoryStudioView />}
 

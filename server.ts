@@ -393,52 +393,94 @@ app.post('/api/generate-story', async (req, res) => {
     const ai = getGeminiClient(apiKey);
     const entropySeed = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
 
+    const isDeepLength = lengthId === 'deep';
+    const isStandardLength = lengthId === 'standard';
+
     const prompt = `
-You are a senior Indian financial storyteller, certified financial planner (CFP), and behavioral finance educator.
-Generate an engaging, relatable, viral storytelling post for an Indian financial advisor to broadcast on WhatsApp, LinkedIn, and social groups.
+You are a master Indian financial storyteller, Certified Financial Planner (CFP), and behavioral finance educator.
+Generate an emotionally captivating, highly realistic, detailed, and non-repetitive financial story for a financial advisor to educate clients and broadcast on WhatsApp, LinkedIn, email, and social networks.
 
 Topic: ${topicTitle || topicId}
 Narrative Angle: ${angleTitle || angleId}
 Target Persona: ${personaTitle || personaId}
-Length: ${lengthId || 'standard'}
+Length Mode: ${lengthId || 'standard'}
 Target Language: "${language || 'gu'}"
-MANDATORY LANGUAGE SPECIFICATION:
-- If Target Language is "gu" (Gujarati), compose ALL text—title, hook, paragraphs, takeaways, forward appeal, and closing—strictly and fluently in authentic Gujarati script (ગુજરાતી ભાષા).
-- If Target Language is "hi" (Hindi), compose entirely in natural Hindi (हिन्दी).
-- If Target Language is "en" (English), compose in crisp, engaging English.
 
-Advisor Details:
-Advisor Name: ${advisorProfile?.advisorName || 'Financial Advisor'}
-Designation: ${advisorProfile?.designation || 'Certified Financial Planner'}
-Credentials / ARN: ${advisorProfile?.professionalDetails || ''}
-Phone: ${advisorProfile?.phoneNumber || '+91 98765 43210'}
-Call to Action Style: ${ctaTitle || ctaStrategyId}
+MANDATORY LANGUAGE SPECIFICATION:
+- If Target Language is "gu" (Gujarati), you MUST write ALL text—title, hook, every paragraph, dialogues, financial calculations, takeaways, CTAs, and closing—strictly and fluently in authentic Gujarati script (ગુજરાતી ભાષા).
+- If Target Language is "hi" (Hindi), write ALL text in natural, engaging Hindi Devanagari script (हिन्दी).
+- If Target Language is "en" (English), write ALL text in compelling, high-credibility English.
+
+STORY LENGTH & DEPTH REQUIREMENTS:
+${isDeepLength ? `
+CRITICAL REQUIREMENT - DEEP AUTHORITY STORY LENGTH:
+- The narrative MUST be a comprehensive, long-form story of 1,500 to 2,000 words!
+- Do NOT abbreviate, summarize, or produce short snippets. Provide 8 to 14 expansive, richly detailed paragraphs.
+- Include natural, vivid dialogues between relatable characters (e.g., discussions over tea, family budget conversations, honest debates between friends or spouse, consultations with an advisor).
+- Build relatable characters facing genuine financial dilemmas in India (EMI burdens, peer pressure, child higher education inflation, retirement anxieties, market panic, medical emergencies).
+- Create meaningful conflicts, emotional turning points, and realistic financial education (SIP compounding, Step-Up SIP math, post-tax vs real inflation, asset allocation, pure protection).
+- Avoid artificial melodrama, repetitive filler, and NEVER make guaranteed-return claims. Emphasize disciplined long-term investing, risk management, and patience.
+` : isStandardLength ? `
+- Standard length: 500 to 750 words across 5 to 7 detailed, engaging narrative paragraphs with dialogues and realistic financial figures.
+` : `
+- Short length: 250 to 350 words across 3 to 4 crisp, punchy paragraphs suitable for quick reading.
+`}
+
+TITLE & HOOK REQUIREMENT:
+1. Start with an attractive, curiosity-driven title.
+2. The FIRST PARAGRAPH must open with a powerful curiosity-driven hook that makes readers want to read the entire story.
+3. Crucially, END THE FIRST PARAGRAPH with a natural CTA encouraging readers to share the story in their WhatsApp groups (e.g., in Gujarati: "👉 આગળ વાંચતા પહેલાં: જો તમારા પરિવાર કે મિત્ર વર્તુળમાં પણ કોઈ આવી જ નાણાકીય દ્વિધામાંથી પસાર થઈ રહ્યું હોય, તો આ વાર્તા હમણાં જ તમારા વોટ્સએપ ગ્રૂપમાં શેર કરો જેથી કોઈ ખોટો નિર્ણય ન લેવાય." / in Hindi: "👉 आगे पढ़ने से पहले: यदि आपके परिवार या मित्र समूह में कोई भी ऐसी ही वित्तीय दुविधा से गुजर रहा है, तो इस कहानी को अभी अपने व्हाट्सएप ग्रुप में साझा करें ताकि किसी का बड़ा नुकसान न हो।" / in English: "👉 Before reading further: If anyone in your family or friend circle is navigating similar money dilemmas, share this story in your WhatsApp group right away so they don't make the same costly mistake.")
+
+STORY ENDING REQUIREMENT:
+1. End the story with a memorable emotional conclusion that resolves the journey with wisdom, peace of mind, and financial clarity.
+2. Follow the conclusion with a natural, persuasive CTA encouraging readers to share the story with friends and WhatsApp groups (in "forwardAppeal").
+
+ADVISOR PROFILE & CONTACT CTA:
+At the very end, display the Financial Advisor's available profile information:
+- Advisor Name: ${advisorProfile?.advisorName || 'Financial Advisor'}
+- Designation: ${advisorProfile?.designation || 'Certified Financial Planner'}
+${advisorProfile?.achievement ? `- Achievement: ${advisorProfile.achievement}` : ''}
+${advisorProfile?.professionalDetails ? `- Credentials / ARN: ${advisorProfile.professionalDetails}` : ''}
+${advisorProfile?.phoneNumber ? `- Mobile Number: ${advisorProfile.phoneNumber}` : ''}
+${advisorProfile?.whatsappNumber ? `- WhatsApp Number: ${advisorProfile.whatsappNumber}` : ''}
+${advisorProfile?.email ? `- Email: ${advisorProfile.email}` : ''}
+${advisorProfile?.location ? `- Location / City: ${advisorProfile.location}` : ''}
+${advisorProfile?.website ? `- Website: ${advisorProfile.website}` : ''}
+- Saved Default CTA: ${advisorProfile?.defaultCTA || 'Contact today for personalized financial planning.'}
+- Applicable Disclaimer: ${advisorProfile?.defaultDisclaimer || 'Mutual fund investments are subject to market risks, read all scheme related documents carefully. Past performance does not guarantee future results.'}
+
+Include a persuasive CTA inviting readers to contact the advisor for personalized financial planning.
+Never invent nonexistent contact details and never omit available ones.
 
 Seed: ${entropySeed}
-Write authentic, relatable characters (like Ramesh & Suresh, Sharmaji & Patelbhai, young techies, middle-class parents). Use realistic Indian financial figures, compounding math, and an emotional or eye-opening perspective.
 
-You MUST return ONLY valid JSON matching this schema:
+You MUST return ONLY valid JSON matching this exact structure:
 {
-  "title": "Scroll-stopping title with 1 emoji",
-  "hook": "1-2 sentence compelling hook that stops the scroll",
+  "title": "Attractive, curiosity-driven headline with 1 emoji",
+  "hook": "1-2 sentence compelling hook summarizing the core curiosity gap",
   "storyParagraphs": [
-    "Engaging narrative paragraph 1 introducing the characters and their choice",
-    "Paragraph 2 with the mathematical reality and contrast years later",
-    "Paragraph 3 with the underlying financial wisdom and life lesson"
+    "Paragraph 1 starting with the curiosity hook, introducing the scenario, and ending with the natural WhatsApp group share CTA",
+    "Paragraph 2 with character dialogue and the emerging conflict...",
+    "Paragraph 3 with realistic financial calculations and contrasting choices...",
+    "Additional paragraphs continuing the deep narrative...",
+    "Final paragraph with memorable emotional conclusion and financial wisdom"
   ],
   "takeaways": [
-    "Actionable financial lesson 1 with concrete rule of thumb",
-    "Actionable financial lesson 2",
-    "Actionable financial lesson 3"
+    "Concrete, actionable financial lesson 1",
+    "Concrete, actionable financial lesson 2",
+    "Concrete, actionable financial lesson 3",
+    "Concrete, actionable financial lesson 4"
   ],
-  "forwardAppeal": "One punchy sentence encouraging the reader to forward this to friends or family",
-  "ctaSignature": "Closing advisory call to action with advisor contact"
+  "forwardAppeal": "Natural, compelling CTA encouraging readers to share the story with friends and WhatsApp groups",
+  "persuasivePlanningCta": "Persuasive CTA inviting readers to contact the advisor for personalized financial planning",
+  "ctaSignature": "Complete formatted signature block with advisor details and disclaimer"
 }
 `;
 
     const responseText = await generateContentWithFallback(ai, prompt, {
       responseMimeType: 'application/json',
-      temperature: 0.85,
+      temperature: 0.8,
+      maxOutputTokens: 8192,
     });
 
     const parsedData = JSON.parse(responseText);
@@ -454,6 +496,192 @@ You MUST return ONLY valid JSON matching this schema:
       success: false,
       useLocalEngine: true,
       error: error?.message || 'Story generation failed, fallback to local engine',
+    });
+  }
+});
+
+// Dedicated AI Client Presentation Generator
+app.post('/api/generate-presentation', async (req, res) => {
+  const {
+    topicPrompt,
+    subjectId,
+    subjectTitle,
+    subCategoryTitle,
+    mode = 'detailed',
+    language = 'en',
+    clientName,
+    questionnaire,
+    advisorProfile,
+  } = req.body;
+
+  try {
+    const ai = getGeminiClient();
+
+    const targetSlideCount = mode === 'quick' ? 4 : mode === 'detailed' ? 8 : 6;
+    const langLabel = language === 'gu' ? 'Gujarati (ગુજરાતી)' : language === 'hi' ? 'Hindi (हिन्दी)' : 'English';
+
+    const presentationTopic = topicPrompt || subjectTitle || subCategoryTitle || 'Comprehensive Financial Strategy';
+
+    const prompt = `You are an elite Senior Certified Financial Planner (CFP) and financial advisory expert creating a client-ready, multi-slide advisory presentation for an independent financial advisor in India.
+
+LANGUAGE REQUIREMENT:
+Generate the entire presentation strictly in ${langLabel}. Ensure pristine, natural, culturally authentic financial vocabulary suitable for high-trust client discussions.
+
+1. ADVISOR'S PRESENTATION GOAL & TOPIC REQUEST:
+"${presentationTopic}"
+Mode: ${mode.toUpperCase()} (${targetSlideCount} slides)
+${clientName ? `Prepared Specifically For Client: "${clientName}"` : 'General Client Advisory Deck'}
+
+2. OPTIONAL CLIENT CONTEXT & QUESTIONNAIRE INSIGHTS (IF PROVIDED):
+${questionnaire?.clientRelationship ? `- Relationship & History: ${questionnaire.clientRelationship}` : ''}
+${questionnaire?.clientGoals ? `- Client's Known Goals & Needs: ${questionnaire.clientGoals}` : ''}
+${questionnaire?.clientBudget ? `- Approximate Annual Income / Investment Budget: ${questionnaire.clientBudget} (${questionnaire.clientBudgetStatus === 'verified' ? 'VERIFIED by client directly' : 'ADVISOR ESTIMATE'})` : ''}
+${questionnaire?.clientConcerns ? `- Objections / Expressed Concerns: ${questionnaire.clientConcerns}` : ''}
+${questionnaire?.hesitationReasons ? `- Stated Hesitations & Suspected True Reasons: ${questionnaire.hesitationReasons}` : ''}
+${questionnaire?.preferredStyle ? `- Client's Preferred Presentation Style: ${questionnaire.preferredStyle}` : ''}
+${questionnaire?.emphasisPoints ? `- High Priority Points / Calculations to Emphasize: ${questionnaire.emphasisPoints}` : ''}
+${questionnaire?.additionalNotes ? `- Advisor Private Strategy Notes: "${questionnaire.additionalNotes}"` : ''}
+
+CRITICAL RULES & SEBI / IRDAI COMPLIANCE:
+1. STRICT CLIENT PRIVACY: NEVER render raw questionnaire questions, advisor secret notes, or "Suspected reasons" text on the client slides. Use them ONLY to smartly tailor the tone, counter objections gently, and frame solutions convincingly.
+2. NO ILLEGAL GUARANTEES: Never state guaranteed returns on mutual funds, equities, or market-linked plans. Transparently state assumptions (e.g., "Assumed 12% CAGR equity SIP illustration for 15 years", "Assumed 7% inflation rate").
+3. COLORFUL YET CRISP IN BLACK-AND-WHITE PRINT: Ensure all slide metrics, tables, and charts are high contrast, readable, and structured.
+4. UNIVERSAL TOPIC INTELLIGENCE: Accurately cover the requested topic — whether SIP, Mutual Funds, Retirement, Term Life, Health Mediclaim, Car/Vehicle Zero-Depreciation insurance, Tax Planning (Old vs New Regime), Home Loans, or Commercial Insurance. Provide accurate Indian market math, terms, and regulatory realities.
+5. ADVISOR BRANDING ON FINAL SLIDE: Integrate the Advisor's details: ${advisorProfile?.advisorName || 'Financial Advisor'}, ${advisorProfile?.designation || 'CFP'}, Phone: ${advisorProfile?.phoneNumber || ''}, WhatsApp: ${advisorProfile?.whatsappNumber || ''}, Email: ${advisorProfile?.email || ''}, License/ARN: ${advisorProfile?.professionalDetails || ''}, and compliance disclaimer: "${advisorProfile?.defaultDisclaimer || 'Mutual fund investments are subject to market risks. Read all scheme related documents carefully.'}".
+
+SLIDE STRUCTURE BLUEPRINT (${targetSlideCount} slides):
+- Slide 1 (Cover): Inspiring title matching the advisor's request, client objective, and executive summary punchline.
+- Slide 2 (The Core Reality & Challenge): Why this matters today, impact of inflation/inaction/risks, 3 crisp bullet points, and 2-3 key metrics.
+- Slide 3 (Core Solution / Strategy): Framework breakdown with visual chartData (type: 'bar', 'donut', 'line', or 'milestones' with labels, values, unit, and explanation).
+- Slide 4 (Realistic Mathematical Projections): Clear, accurate calculations with transparent assumptions, comparisons or compounding numbers.
+${mode === 'detailed' ? `- Slide 5 (Option Comparison Matrix): A structured comparisonTable with headers [Parameter, Option A, Option B] and 3-4 rows showing pros/cons.
+- Slide 6 (Risks, Limitations & Prudent Mitigations): Real-world limitations, liquidity, market cycles, and how the advisor mitigates them.
+- Slide 7 (Action Roadmap / Step-by-Step): Concrete milestone roadmap (e.g. Month 1 setup, Year 1 review, Milestone checks).` : ''}
+${mode === 'personalized' ? `- Slide 5 (Direct Objection Handlers & Personalized FAQ): Respectfully address the client's stated concerns with facts and reassuring perspective.` : ''}
+- Slide ${targetSlideCount} (Clear Next Steps & Advisor Contact): Step-by-step action plan, compelling CTA, full advisor credentials, and compliance disclaimer.
+
+You MUST respond with valid JSON matching this exact structure:
+{
+  "title": "Presentation Main Title",
+  "slides": [
+    {
+      "slideNumber": 1,
+      "slideType": "cover",
+      "badge": "Short Badge (e.g. Strategic Plan)",
+      "title": "Slide Title",
+      "subtitle": "Clear Subtitle",
+      "keyTakeaway": "1-sentence executive punchline",
+      "bulletPoints": [
+        "Crisp point 1",
+        "Crisp point 2",
+        "Crisp point 3"
+      ],
+      "metrics": [
+        { "label": "Target Horizon", "value": "10-15 Yrs", "helper": "Compound cycle" },
+        { "label": "Expected Benchmark", "value": "12% CAGR", "helper": "Illustrative basis" }
+      ],
+      "assumptions": ["Assumed 12% CAGR equity growth for illustrative purposes"]
+    }
+  ]
+}
+Each slide should have appropriate properties (metrics, chartData, comparisonTable, risksAndLimitations, assumptions, or callToAction).`;
+
+    const responseText = await generateContentWithFallback(ai, prompt, {
+      responseMimeType: 'application/json',
+      temperature: 0.7,
+      maxOutputTokens: 8192,
+    });
+
+    const parsedData = JSON.parse(responseText);
+
+    return res.json({
+      success: true,
+      source: 'ai_api',
+      data: parsedData,
+    });
+  } catch (error: any) {
+    console.error('Presentation Generation API Error:', error);
+    return res.json({
+      success: false,
+      useLocalEngine: true,
+      error: error?.message || 'Presentation generation failed, falling back to local engine',
+    });
+  }
+});
+
+// Dedicated AI Single Slide Regenerator
+app.post('/api/regenerate-slide', async (req, res) => {
+  const {
+    presentationTitle,
+    subjectTitle,
+    slideNumber,
+    slideType,
+    language = 'en',
+    clientProfile,
+    refinementPrompt,
+    advisorProfile,
+  } = req.body;
+
+  try {
+    const ai = getGeminiClient();
+    const langLabel = language === 'gu' ? 'Gujarati (ગુજરાતી)' : language === 'hi' ? 'Hindi (हिन्दी)' : 'English';
+
+    const prompt = `You are a Senior Certified Financial Planner (CFP).
+Regenerate or enhance Slide #${slideNumber} (${slideType}) of a financial presentation titled "${presentationTitle}" on topic "${subjectTitle}".
+Language: ${langLabel}.
+Client Profile: ${clientProfile || 'Retail / HNI Investor'}.
+Advisor's Custom Refinement Request: "${refinementPrompt || 'Make this slide more impactful, data-accurate, and engaging'}".
+
+COMPLIANCE RULES:
+- No guaranteed return claims. Identify assumptions clearly.
+- Keep advisor contact and regulatory disclaimers accurate if this is the final slide.
+- Return ONLY valid JSON for this single slide:
+{
+  "slideNumber": ${slideNumber},
+  "slideType": "${slideType}",
+  "badge": "Badge text",
+  "title": "Impactful Slide Title",
+  "subtitle": "Subtitle text",
+  "keyTakeaway": "Executive punchline",
+  "bulletPoints": [
+    "Compelling point 1",
+    "Compelling point 2",
+    "Compelling point 3"
+  ],
+  "metrics": [
+    { "label": "Metric Name", "value": "Value", "helper": "Context" }
+  ],
+  "chartData": {
+    "type": "bar",
+    "title": "Chart Title",
+    "labels": ["Item A", "Item B", "Item C"],
+    "values": [25, 50, 100],
+    "unit": "Lakhs",
+    "explanation": "Brief context"
+  },
+  "risksAndLimitations": ["Key realistic limitation or market consideration"],
+  "assumptions": ["Key calculation baseline assumption"]
+}`;
+
+    const responseText = await generateContentWithFallback(ai, prompt, {
+      responseMimeType: 'application/json',
+      temperature: 0.75,
+      maxOutputTokens: 3000,
+    });
+
+    const parsedSlide = JSON.parse(responseText);
+
+    return res.json({
+      success: true,
+      source: 'ai_api',
+      slide: parsedSlide,
+    });
+  } catch (error: any) {
+    console.error('Slide Regeneration API Error:', error);
+    return res.json({
+      success: false,
+      useLocalEngine: true,
+      error: error?.message || 'Slide regeneration failed',
     });
   }
 });

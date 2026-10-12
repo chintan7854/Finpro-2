@@ -30,6 +30,7 @@ import {
   Heart,
   Target,
   BookOpen,
+  Presentation,
 } from 'lucide-react';
 import { FinancialSubjectId, GeneratedContent } from '../types';
 import { useClientCrm } from '../context/ClientCrmContext';
@@ -147,7 +148,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 px-1">
           {t('dashboard.quickActions')}
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3 sm:gap-4">
+          {/* Action: Client Presentation Studio (Flagship 40+ Topics) */}
+          <div
+            onClick={() => onNavigate('presentation-studio')}
+            className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 text-white p-4 sm:p-5 shadow-lg shadow-indigo-950/20 hover:shadow-xl hover:shadow-indigo-900/30 hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col justify-between min-h-[140px] border border-indigo-400/40"
+          >
+            <div className="flex items-start justify-between">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 backdrop-blur-md flex items-center justify-center text-indigo-300 border border-indigo-400/30">
+                <Presentation className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              </div>
+              <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-indigo-500 text-white shadow-xs animate-pulse">
+                40+ PPT 📊
+              </span>
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-white mb-1 group-hover:text-indigo-300 transition-colors">
+                Presentation Studio
+              </h3>
+              <p className="text-xs text-indigo-200 line-clamp-1">
+                Client PPTX, PDF & Deck
+              </p>
+            </div>
+          </div>
+
           {/* Action 1: Create Content (Highlight) */}
           <div
             onClick={() => onNavigate('create')}

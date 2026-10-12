@@ -62,9 +62,9 @@ export const STORY_PERSONAS_METADATA: StoryPersonaConfig[] = [
 ];
 
 export const STORY_LENGTHS_METADATA: StoryLengthConfig[] = [
-  { id: 'short', wordCount: '~120 Words', badge: 'Quick Read' },
-  { id: 'standard', wordCount: '~240 Words', badge: 'Viral Balance' },
-  { id: 'deep', wordCount: '~380 Words', badge: 'High Authority' },
+  { id: 'short', wordCount: '~200–350 Words', badge: 'Quick Read' },
+  { id: 'standard', wordCount: '~500–750 Words', badge: 'Viral Story' },
+  { id: 'deep', wordCount: '1,500–2,000 Words', badge: 'Deep Authority' },
 ];
 
 export const STORY_CTAS_METADATA: StoryCtaConfig[] = [
@@ -201,9 +201,9 @@ const ENGLISH_TRANSLATIONS: StoryStudioTranslations = {
     women: { title: 'Women Investors & Homemakers', ageRange: '25-50 Yrs', desc: 'Financial independence, gold alternatives, household security' },
   },
   lengths: {
-    short: { title: 'WhatsApp Status / Reel Script', words: '~120 Words', desc: 'Crisp 45-second read, perfect for status slides or fast skimming' },
-    standard: { title: 'Standard Viral Broadcast', words: '~240 Words', desc: 'Optimal for WhatsApp groups, broadcast lists, and Facebook' },
-    deep: { title: 'Deep Authority Article', words: '~380 Words', desc: 'High-credibility educational newsletter for LinkedIn & client emails' },
+    short: { title: 'Quick WhatsApp Read', words: '~200–350 Words', desc: 'Fast, punchy 1-2 minute read ideal for quick status updates' },
+    standard: { title: 'Standard Viral Broadcast', words: '~500–750 Words', desc: 'Optimal narrative balance for WhatsApp groups and LinkedIn' },
+    deep: { title: 'Deep Authority Master Story', words: '1,500–2,000 Words', desc: 'Comprehensive, emotionally rich long-form masterwork with deep dialogues and education' },
   },
   ctas: {
     viral_forward: { title: 'Viral Group Forward', hook: 'Forward this story to 3 family members or friends who need this today.' },
@@ -297,9 +297,9 @@ const GUJARATI_TRANSLATIONS: StoryStudioTranslations = {
     women: { title: 'મહિલા રોકાણકારો અને ગૃહિણીઓ', ageRange: '૨૫-૫૦ વર્ષ', desc: 'આર્થિક આત્મનિર્ભરતા અને સોના સિવાયના સ્માર્ટ રોકાણો' },
   },
   lengths: {
-    short: { title: 'વોટ્સએપ સ્ટેટસ / રીલ સ્ક્રિપ્ટ', words: '~૧૨૦ શબ્દો', desc: '૪૫ સેકન્ડમાં ઝડપી વાંચન માટે પરફેક્ટ' },
-    standard: { title: 'સ્ટાન્ડર્ડ વાયરલ બ્રોડકાસ્ટ', words: '~૨૪૦ શબ્દો', desc: 'વોટ્સએપ ગ્રૂપ અને ફેસબુક માટે શ્રેષ્ઠ' },
-    deep: { title: 'ઊંડાણપૂર્વક વિશ્લેષણ લેખ', words: '~૩૮૦ શબ્દો', desc: 'વિશેષ જ્ઞાન અને સંપૂર્ણ ગાઈડ' },
+    short: { title: 'ઝડપી વોટ્સએપ વાંચન', words: '~૨૦૦–૩૫૦ શબ્દો', desc: '૧-૨ મિનિટમાં ઝડપી વાંચન માટે સંક્ષિપ્ત વાર્તા' },
+    standard: { title: 'સ્ટાન્ડર્ડ વાયરલ બ્રોડકાસ્ટ', words: '~૫૦૦–૭૫૦ શબ્દો', desc: 'વોટ્સએપ ગ્રૂપ અને સોશિયલ મીડિયા માટે શ્રેષ્ઠ કદ' },
+    deep: { title: 'ઊંડાણપૂર્વક ઓથોરિટી વાર્તા', words: '૧,૫૦૦–૨,૦૦૦ શબ્દો', desc: '૧,૫૦૦થી ૨,૦૦૦ શબ્દોની સંપૂર્ણ ભાવનાત્મક, જીવંત સંવાદો અને સચોટ નાણાકીય જ્ઞાનવાળી માસ્ટર વાર્તા' },
   },
   ctas: {
     viral_forward: { title: 'ગ્રૂપ ફોરવર્ડ અપીલ', hook: 'આ વાર્તા તમારા ૩ ખાસ મિત્રો અને પરિવારજનોને જરૂર મોકલો.' },
@@ -393,9 +393,9 @@ const HINDI_TRANSLATIONS: StoryStudioTranslations = {
     women: { title: 'महिला निवेशक और गृहणियां', ageRange: '२૫-૫૦ वर्ष', desc: 'वित्तीय आत्मनिर्भरता और सोने से बेहतर विकल्प' },
   },
   lengths: {
-    short: { title: 'व्हाट्सएप स्टेटस / रील स्क्रिप्ट', words: '~१२० शब्द', desc: '४५ सेकंड में तेजी से पढ़ने के लिए बेहतरीन' },
-    standard: { title: 'मानक वायरल ब्रॉडकास्ट', words: '~२४० शब्द', desc: 'व्हाट्सएप ग्रुप और फेसबुक के लिए उपयुक्त' },
-    deep: { title: 'गहन विश्लेषण लेख', words: '~३८० शब्द', desc: 'विस्तृत ज्ञान और पूर्ण मार्गदर्शन' },
+    short: { title: 'त्वरित व्हाट्सएप वाचन', words: '~२००–३५० शब्द', desc: '१-२ मिनट में तीव्र वाचन हेतु संक्षिप्त कहानी' },
+    standard: { title: 'मानक वायरल ब्रॉडकास्ट', words: '~५००–७५० शब्द', desc: 'व्हाट्सएप ग्रुप और लिंक्डइन के लिए सर्वोत्तम आकार' },
+    deep: { title: 'गहन प्रामाणिक कथा (Deep Authority)', words: '१,५००–२,००० शब्द', desc: '१,५०० से २,००० शब्दों की विस्तृत, भावनात्मक संवादों और संपूर्ण वित्तीय शिक्षा से भरपूर मास्टर कहानी' },
   },
   ctas: {
     viral_forward: { title: 'ग्रुप फॉरवर्ड अपील', hook: 'यह कहानी अपने ३ खास दोस्तों और परिवारजनों को जरूर भेजें।' },

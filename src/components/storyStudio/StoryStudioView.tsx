@@ -360,6 +360,26 @@ export const StoryStudioView: React.FC = () => {
     return text.trim().split(/\s+/).filter(Boolean).length;
   }, [currentStory]);
 
+  // Active Planning CTA & Contact helpers
+  const cleanWa = useMemo(() => (profile.whatsappNumber || profile.phoneNumber || '').replace(/[^0-9]/g, ''), [profile.whatsappNumber, profile.phoneNumber]);
+  const waLink = useMemo(() => cleanWa ? `https://wa.me/${cleanWa.startsWith('91') ? cleanWa : '91' + cleanWa}` : '', [cleanWa]);
+
+  const defaultPlanningCta = useMemo(() => {
+    if (language === 'gu') return 'તમારા પરિવારના સપનાઓ અને સુરક્ષિત ભવિષ્ય માટે આજે જ પર્સનલ ફાઇનાન્શિયલ પ્લાનિંગ શરૂ કરો.';
+    if (language === 'hi') return 'अपने परिवार के सपनों और सुरक्षित भविष्य के लिए आज ही व्यक्तिगत वित्तीय योजना शुरू करें।';
+    return 'Connect today for a personalized financial roadmap tailored to your family milestones.';
+  }, [language]);
+
+  const activePlanningCta = currentStory?.persuasivePlanningCta || profile.defaultCTA || defaultPlanningCta;
+
+  const defaultDisc = useMemo(() => {
+    if (language === 'gu') return 'મ્યુચ્યુઅલ ફંડ રોકાણ બજારના જોખમોને આધીન છે. યોજના સંબંધિત તમામ દસ્તાવેજો કાળજીપૂર્વક વાંચો. ભૂતકાળનું વળતર ભવિષ્યની ગેરંટી નથી.';
+    if (language === 'hi') return 'म्यूचुअल फंड निवेश बाजार के जोखिमों के अधीन हैं, योजना से जुड़े सभी दस्तावेजों को ध्यान से पढ़ें। पिछला प्रदर्शन भविष्य के रिटर्न की गारंटी नहीं है।';
+    return 'Mutual fund investments are subject to market risks, read all scheme related documents carefully. Past performance does not guarantee future results.';
+  }, [language]);
+
+  const activeDisclaimer = profile.defaultDisclaimer || defaultDisc;
+
   return (
     <div className="space-y-8 pb-20 max-w-6xl mx-auto">
       {/* -------------------------------------------------------------
@@ -836,38 +856,101 @@ export const StoryStudioView: React.FC = () => {
                   </div>
                 )}
 
+                {/* Forward Appeal / Group Share CTA */}
                 {currentStory.forwardAppeal && (
                   <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200/80 text-amber-900 text-xs font-semibold">
-                    📲 *{currentStory.forwardAppeal}*
+                    📲 *Share with Friends & WhatsApp Groups:*
+                    <div className="font-normal mt-0.5">{currentStory.forwardAppeal}</div>
                   </div>
                 )}
 
-                {/* Simulated Advisor WhatsApp Signature */}
-                <div className="pt-3 border-t border-emerald-200/80 text-xs space-y-1 text-slate-700">
+                {/* Advisor Planning CTA & Complete Contact Block */}
+                <div className="pt-4 border-t border-emerald-200/80 text-xs space-y-2 text-slate-700">
                   <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
                     ━━━━━━━━━━━━━━━━━━━━━━━━━━━
                   </div>
-                  <div className="font-bold text-slate-900">
-                    *{profile.advisorName || 'Financial Wealth Advisor'}*
-                  </div>
-                  <div className="text-slate-600 italic">
-                    _{profile.designation || 'Certified Financial Planner'}_
-                  </div>
-                  {profile.professionalDetails && (
-                    <div className="text-[11px] text-slate-500">
-                      📋 {profile.professionalDetails}
+                  <div className="p-3 bg-emerald-100/70 rounded-xl border border-emerald-300 text-emerald-950 font-bold">
+                    📞 *Plan Your Financial Freedom Today:*
+                    <div className="text-xs font-medium text-emerald-900 mt-1">
+                      🎯 {activePlanningCta}
                     </div>
-                  )}
-                  {profile.phoneNumber && (
-                    <div className="font-mono text-emerald-700 font-bold">
-                      📱 Mobile: {profile.phoneNumber}
-                    </div>
-                  )}
+                  </div>
+
+                  <div className="space-y-1 pt-1 font-sans">
+                    {profile.advisorName && (
+                      <div className="font-bold text-slate-900 text-sm">
+                        👤 *{profile.advisorName}*
+                      </div>
+                    )}
+                    {profile.designation && (
+                      <div className="text-slate-600 italic">
+                        💼 _{profile.designation}_
+                      </div>
+                    )}
+                    {profile.achievement && (
+                      <div className="text-[11px] text-emerald-800 font-medium">
+                        🏆 {profile.achievement}
+                      </div>
+                    )}
+                    {profile.professionalDetails && (
+                      <div className="text-[11px] text-slate-600">
+                        📋 Credentials / ARN: {profile.professionalDetails}
+                      </div>
+                    )}
+                    {profile.phoneNumber && (
+                      <div className="font-mono text-emerald-800 font-bold">
+                        📱 Mobile: {profile.phoneNumber}
+                      </div>
+                    )}
+                    {profile.whatsappNumber && profile.whatsappNumber !== profile.phoneNumber && (
+                      <div className="font-mono text-emerald-800 font-bold">
+                        💬 WhatsApp: {profile.whatsappNumber}
+                      </div>
+                    )}
+                    {waLink && (
+                      <div className="text-xs text-emerald-700 underline font-medium">
+                        🔗 WhatsApp Direct: {waLink}
+                      </div>
+                    )}
+                    {profile.email && (
+                      <div className="text-[11px] text-slate-600">
+                        ✉️ Email: {profile.email}
+                      </div>
+                    )}
+                    {profile.location && (
+                      <div className="text-[11px] text-slate-600">
+                        📍 Location: {profile.location}
+                      </div>
+                    )}
+                    {profile.website && (
+                      <div className="text-[11px] text-slate-600">
+                        🌐 Website: {profile.website}
+                      </div>
+                    )}
+                    {profile.defaultCTA && profile.defaultCTA !== activePlanningCta && (
+                      <div className="text-xs text-slate-800 font-semibold pt-1">
+                        📌 {profile.defaultCTA}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-emerald-200/60 text-[10px] text-slate-500 italic leading-snug">
+                    ⚠️ *Disclaimer:* {activeDisclaimer}
+                  </div>
                 </div>
               </div>
             ) : (
               /* Clean Reading View */
               <div className="max-w-2xl mx-auto space-y-4 text-sm text-slate-700 leading-relaxed">
+                <div className="border-b border-slate-200 pb-3">
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                    {currentStory.title}
+                  </h2>
+                  <p className="text-sm font-semibold text-emerald-700 italic mt-1">
+                    {currentStory.hook}
+                  </p>
+                </div>
+
                 {currentStory.storyParagraphs.map((para, i) => (
                   <p key={i} className="text-base text-slate-800 leading-relaxed">
                     {para}
@@ -881,6 +964,52 @@ export const StoryStudioView: React.FC = () => {
                       <li key={idx}>{t}</li>
                     ))}
                   </ul>
+                </div>
+
+                {currentStory.forwardAppeal && (
+                  <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 text-amber-900 text-xs font-semibold">
+                    📲 {currentStory.forwardAppeal}
+                  </div>
+                )}
+
+                {/* Clean Advisor Profile & Contact Box */}
+                <div className="mt-8 p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="font-bold text-slate-900 text-sm flex items-center justify-between">
+                    <span>Personalized Financial Advisory</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Verified Advisor</span>
+                  </div>
+                  <p className="text-xs text-slate-700 font-medium">
+                    {activePlanningCta}
+                  </p>
+                  <div className="pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-700">
+                    {profile.advisorName && (
+                      <div><span className="font-bold text-slate-900">Advisor:</span> {profile.advisorName}</div>
+                    )}
+                    {profile.designation && (
+                      <div><span className="font-bold text-slate-900">Designation:</span> {profile.designation}</div>
+                    )}
+                    {profile.phoneNumber && (
+                      <div><span className="font-bold text-slate-900">Phone:</span> {profile.phoneNumber}</div>
+                    )}
+                    {profile.whatsappNumber && (
+                      <div><span className="font-bold text-slate-900">WhatsApp:</span> {profile.whatsappNumber}</div>
+                    )}
+                    {profile.email && (
+                      <div><span className="font-bold text-slate-900">Email:</span> {profile.email}</div>
+                    )}
+                    {profile.location && (
+                      <div><span className="font-bold text-slate-900">Location:</span> {profile.location}</div>
+                    )}
+                    {profile.website && (
+                      <div><span className="font-bold text-slate-900">Website:</span> {profile.website}</div>
+                    )}
+                    {profile.professionalDetails && (
+                      <div className="sm:col-span-2"><span className="font-bold text-slate-900">ARN / Credentials:</span> {profile.professionalDetails}</div>
+                    )}
+                  </div>
+                  <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-500 italic">
+                    Disclaimer: {activeDisclaimer}
+                  </div>
                 </div>
               </div>
             )}

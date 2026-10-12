@@ -20,6 +20,7 @@ import {
   Gift,
   BookOpen,
   Gauge,
+  Presentation,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -33,6 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => 
 
   const navigation = [
     { id: 'dashboard', name: t('nav.dashboard'), icon: LayoutDashboard },
+    { id: 'presentation-studio', name: 'Presentation Studio', icon: Presentation, badge: '40+ PPT', isIndigo: true },
     { id: 'story-studio', name: 'Viral Story Studio', icon: BookOpen, badge: 'HOT' },
     { id: 'create', name: t('nav.createContent'), icon: Sparkles, badge: 'AI' },
     { id: 'theme-studio', name: '25 Theme Posters', icon: Layers, badge: '25 Themes' },

@@ -98,6 +98,7 @@ export interface GeneratedStoryResult {
   storyParagraphs: string[];
   takeaways: string[];
   forwardAppeal: string;
+  persuasivePlanningCta?: string;
   ctaSignature: string;
   fullFormattedPayload: string;
   source: 'ai_api' | 'local_engine';
