@@ -13,7 +13,10 @@ import {
 } from '../../constants/presentationQuestionnaire';
 import {
   generateClientPresentation,
+  generateLocalPresentation,
+  createAdvisorSnapshot,
   regenerateSlide,
+  sanitizeClientPresentation,
 } from '../../services/presentationGenerator';
 import {
   exportToPptx,
@@ -25,6 +28,7 @@ import { SlideCard } from './SlideCard';
 import { QuestionnaireForm } from './QuestionnaireForm';
 import { SlidePresenterModal } from './SlidePresenterModal';
 import { SlideEditorModal } from './SlideEditorModal';
+import { ClientReportDocumentPreview } from './ClientReportDocumentPreview';
 import {
   Sparkles,
   Presentation,
@@ -47,10 +51,26 @@ import {
   Globe,
   HelpCircle,
   Lightbulb,
+  AlertCircle,
+  CheckCircle,
 } from 'lucide-react';
 import { LanguageCode } from '../../types';
 
+import { AdvisorSectorCompanySelector } from './AdvisorSectorCompanySelector';
+import { AdvisorBusinessProfile } from '../../constants/advisorSectorsData';
+
 const STORAGE_KEY = 'finadvisor_client_presentations_v2';
+
+const INITIAL_BUSINESS_PROFILE: AdvisorBusinessProfile = {
+  sectorId: 'sip_mf_distributor',
+  sectorName: 'SIP / Mutual Fund Distributor',
+  companyId: 'hdfc_mutual_fund',
+  companyName: 'HDFC Mutual Fund',
+  productName: 'HDFC Flexi Cap Fund — Regular Plan, Growth Option',
+  advisorRole: 'Mutual Fund Distributor',
+  authorizationIdentifier: 'ARN-184920',
+  needsVerification: false,
+};
 
 const INITIAL_QUESTIONNAIRE: ClientQuestionnaire = {
   topicPrompt: '',
@@ -78,6 +98,7 @@ export const PresentationStudioView: React.FC = () => {
   const [clientName, setClientName] = useState<string>('');
   const [presentationMode, setPresentationMode] = useState<PresentationMode>('detailed');
   const [selectedLanguage, setSelectedLanguage] = useState<LanguageCode>(language);
+  const [businessProfile, setBusinessProfile] = useState<AdvisorBusinessProfile>(INITIAL_BUSINESS_PROFILE);
   const [questionnaire, setQuestionnaire] = useState<ClientQuestionnaire>(INITIAL_QUESTIONNAIRE);
 
   // Active Presentation state
@@ -88,14 +109,28 @@ export const PresentationStudioView: React.FC = () => {
   // Modals state
   const [isPresenterOpen, setIsPresenterOpen] = useState<boolean>(false);
   const [editingSlide, setEditingSlide] = useState<PresentationSlide | null>(null);
+  const [viewLayoutMode, setViewLayoutMode] = useState<'report_document' | 'slide_deck'>('report_document');
 
   // Saved Presentations history
   const [savedPresentations, setSavedPresentations] = useState<ClientPresentation[]>([]);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [noticeType, setNoticeType] = useState<'success' | 'error' | 'info'>('info');
+  const [readyFile, setReadyFile] = useState<{ url: string; filename: string; mimeType: string } | null>(null);
 
   // DOM refs for PDF rasterization and image capture
   const activeSlideRef = useRef<HTMLDivElement>(null);
   const hiddenSlidesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Listen for file downloads to provide instant direct link fallback
+  useEffect(() => {
+    const handleFileReady = (event: any) => {
+      if (event?.detail) {
+        setReadyFile(event.detail);
+      }
+    };
+    window.addEventListener('finadvisor:file-ready', handleFileReady);
+    return () => window.removeEventListener('finadvisor:file-ready', handleFileReady);
+  }, []);
 
   // Keep selected language in sync with app language if user changes it
   useEffect(() => {
@@ -109,9 +144,16 @@ export const PresentationStudioView: React.FC = () => {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setSavedPresentations(parsed);
-          if (!activePresentation) {
-            setActivePresentation(parsed[0]);
+          const valid = parsed
+            .filter(
+              (p: any) => p && typeof p === 'object' && Array.isArray(p.slides) && p.slides.length > 0
+            )
+            .map(sanitizeClientPresentation);
+          if (valid.length > 0) {
+            setSavedPresentations(valid);
+            if (!activePresentation) {
+              setActivePresentation(valid[0]);
+            }
           }
         }
       }
@@ -157,23 +199,43 @@ export const PresentationStudioView: React.FC = () => {
 
   // Handle Generate Presentation
   const handleGenerate = async () => {
-    if (!topicPrompt.trim()) {
-      alert('Please describe what presentation you would like to create in the text box.');
-      return;
+    const comp = businessProfile.companyName?.trim() || '';
+    const prod = businessProfile.productName?.trim() || '';
+    const sect = businessProfile.sectorName?.trim() || '';
+
+    // Smart fallback if product name is empty: synthesize or pick from catalog
+    const effectiveBusinessProfile: AdvisorBusinessProfile = {
+      ...businessProfile,
+      productName: prod || (comp ? `${comp} Flagship ${sect || 'Solution'}` : `${sect || 'Tailored Financial'} Solution`),
+    };
+
+    let finalPrompt = topicPrompt.trim();
+    if (!finalPrompt) {
+      if (comp && effectiveBusinessProfile.productName) {
+        finalPrompt = `${comp} — ${effectiveBusinessProfile.productName}`;
+      } else if (comp) {
+        finalPrompt = `${comp} — ${sect || 'Advisory Plan'}`;
+      } else if (sect) {
+        finalPrompt = `${sect} — Comprehensive Advisory Strategy`;
+      } else {
+        finalPrompt = 'Comprehensive Financial Planning & Investment Strategy';
+      }
     }
 
     setIsGenerating(true);
     setExportNotice(null);
+    setNoticeType('info');
     try {
       consumeCredit();
       const generated = await generateClientPresentation({
-        topicPrompt: topicPrompt.trim(),
+        topicPrompt: finalPrompt,
         mode: presentationMode,
         language: selectedLanguage,
         clientName: clientName.trim() || undefined,
+        businessProfile: effectiveBusinessProfile,
         questionnaire: {
           ...questionnaire,
-          topicPrompt: topicPrompt.trim(),
+          topicPrompt: finalPrompt,
           clientName: clientName.trim() || undefined,
         },
         advisorProfile: profile,
@@ -185,8 +247,41 @@ export const PresentationStudioView: React.FC = () => {
       setActiveTab('deck');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
-      console.error('Failed to generate presentation:', err);
-      alert('Unable to generate presentation. Please check inputs and try again.');
+      console.warn('API presentation generation failed, activating deterministic local fallback:', err);
+      try {
+        const fallbackPres = generateLocalPresentation({
+          topicPrompt: finalPrompt,
+          subjectId: 'custom_financial_presentation',
+          subjectTitle: finalPrompt,
+          subCategoryTitle: 'Advisory Blueprint',
+          mode: presentationMode,
+          language: selectedLanguage,
+          clientName: clientName.trim() || undefined,
+          questionnaire: {
+            ...questionnaire,
+            topicPrompt: finalPrompt,
+            clientName: clientName.trim() || undefined,
+          },
+          advisorSnapshot: createAdvisorSnapshot(profile, effectiveBusinessProfile),
+          businessProfile: effectiveBusinessProfile,
+        });
+
+        setActivePresentation(fallbackPres);
+        setActiveSlideIndex(0);
+        saveToHistory(fallbackPres);
+        setActiveTab('deck');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (fallbackErr: any) {
+        console.error('All presentation generation options failed:', fallbackErr);
+        setNoticeType('error');
+        setExportNotice(
+          selectedLanguage === 'gu'
+            ? 'પ્રસ્તુતિ જનરેટ કરવામાં સમસ્યા આવી. કૃપા કરીને ફરી પ્રયાસ કરો.'
+            : selectedLanguage === 'hi'
+            ? 'प्रेजेंटेशन जनरेट करने में समस्या आई। कृपया पुनः प्रयास करें।'
+            : 'Unable to generate presentation. Please check inputs and try again.'
+        );
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -244,11 +339,8 @@ export const PresentationStudioView: React.FC = () => {
       if (slideNodes.length === 0 && activeSlideRef.current) {
         slideNodes = [activeSlideRef.current];
       }
-      if (slideNodes.length === 0) {
-        throw new Error('No slide elements found on screen');
-      }
 
-      await exportToPdf(slideNodes, activePresentation.title);
+      await exportToPdf(slideNodes, activePresentation.title, activePresentation);
       setExportNotice(
         selectedLanguage === 'gu'
           ? 'PDF દસ્તાવેજ સફળતાપૂર્વક ડાઉનલોડ થઈ ગયો!'
@@ -259,14 +351,23 @@ export const PresentationStudioView: React.FC = () => {
       setTimeout(() => setExportNotice(null), 4000);
     } catch (err: any) {
       console.error('PDF export error:', err);
-      setExportNotice(
-        selectedLanguage === 'gu'
-          ? 'PDF ડાઉનલોડ કરવામાં સમસ્યા આવી. તમે Print બટન પર ક્લિક કરીને પણ "Save as PDF" કરી શકો છો.'
-          : selectedLanguage === 'hi'
-          ? 'PDF डाउनलोड में समस्या आई। आप Print बटन से "Save as PDF" भी कर सकते हैं।'
-          : 'Failed to generate PDF. You can also click the Print button and select "Save as PDF".'
-      );
-      setTimeout(() => setExportNotice(null), 8000);
+      // Fallback directly to vector presentation if rasterization had an issue
+      try {
+        await exportToPdf([], activePresentation.title, activePresentation);
+        setExportNotice(
+          selectedLanguage === 'gu'
+            ? 'PDF દસ્તાવેજ સફળતાપૂર્વક ડાઉનલોડ થઈ ગયો!'
+            : 'PDF document downloaded successfully!'
+        );
+        setTimeout(() => setExportNotice(null), 4000);
+      } catch (fallbackErr: any) {
+        setExportNotice(
+          selectedLanguage === 'gu'
+            ? 'PDF ડાઉનલોડમાં સમસ્યા આવી. કૃપા કરીને Print બટન પર ક્લિક કરીને "Save as PDF" કરો.'
+            : 'Issue during download. You can also click the Print button and choose "Save as PDF".'
+        );
+        setTimeout(() => setExportNotice(null), 6000);
+      }
     }
   };
 
@@ -452,22 +553,85 @@ export const PresentationStudioView: React.FC = () => {
         </div>
       </div>
 
-      {/* Export status notice toast */}
-      {exportNotice && (
-        <div className="p-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold flex items-center justify-between shadow-lg border border-slate-700 animate-fade-in">
-          <span>{exportNotice}</span>
-          <button
-            onClick={() => setExportNotice(null)}
-            className="text-slate-400 hover:text-white ml-2"
-          >
-            ✕
-          </button>
+      {/* Export status notice toast with direct link and print fallback */}
+      {(exportNotice || readyFile) && (
+        <div
+          className={`p-3.5 rounded-2xl text-xs font-semibold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl border animate-fade-in ${
+            noticeType === 'error'
+              ? 'bg-rose-950/95 text-rose-100 border-rose-700/80 shadow-rose-950/30'
+              : 'bg-slate-900 text-white border-slate-700'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            {noticeType === 'error' ? (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            ) : (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+            )}
+            <span className="leading-snug">
+              {exportNotice || (selectedLanguage === 'gu' ? 'દસ્તાવેજ ડાઉનલોડ માટે તૈયાર છે!' : selectedLanguage === 'hi' ? 'दस्तावेज़ डाउनलोड के लिए तैयार है!' : 'Document ready for download!')}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
+            {noticeType !== 'error' && readyFile && (
+              <a
+                href={readyFile.url}
+                download={readyFile.filename}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center space-x-1.5 shadow-xs transition-all text-xs"
+                title="Direct Download Link"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>
+                  {selectedLanguage === 'gu' ? 'સાચવો / ડાઉનલોડ' : selectedLanguage === 'hi' ? 'डाउनलोड करें' : 'Download'} ({readyFile.filename.length > 20 ? readyFile.filename.slice(-18) : readyFile.filename})
+                </span>
+              </a>
+            )}
+
+            {noticeType !== 'error' && (
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold flex items-center space-x-1.5 transition-all text-xs cursor-pointer"
+                title="Print directly or save as clean PDF"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-400" />
+                <span>
+                  {selectedLanguage === 'gu' ? 'પ્રિન્ટ / Save PDF' : selectedLanguage === 'hi' ? 'प्रिंट / Save PDF' : 'Print / Save PDF'}
+                </span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                setExportNotice(null);
+                setReadyFile(null);
+                setNoticeType('info');
+              }}
+              className="text-slate-400 hover:text-white p-1 ml-1 cursor-pointer"
+              title="Close notification"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
       {/* TAB 1: CREATE PRESENTATION */}
       {activeTab === 'create' && (
         <div className="space-y-6">
+          {/* Universal Sector, Company & Product Selection (Step 1 to 4) */}
+          <AdvisorSectorCompanySelector
+            businessProfile={businessProfile}
+            onChange={(updated) => setBusinessProfile(updated)}
+            language={selectedLanguage}
+            onAutoPopulateTopic={(suggestedPrompt) => {
+              setTopicPrompt(suggestedPrompt);
+            }}
+          />
+
           {/* Section 1: Simple Presentation Creation (Large Text Box) */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-7 shadow-sm">
             <div className="mb-3">
@@ -644,24 +808,36 @@ export const PresentationStudioView: React.FC = () => {
             <button
               type="button"
               onClick={handleGenerate}
-              disabled={isGenerating || !topicPrompt.trim()}
-              className="w-full py-4 sm:py-4.5 px-6 rounded-2xl font-extrabold text-base sm:text-lg text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-700 hover:from-emerald-500 hover:via-teal-500 hover:to-indigo-600 shadow-xl shadow-emerald-900/20 active:scale-[0.99] transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              disabled={isGenerating}
+              className="w-full py-4 sm:py-4.5 px-6 rounded-2xl font-extrabold text-base sm:text-lg text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-700 hover:from-emerald-500 hover:via-teal-500 hover:to-indigo-600 shadow-xl shadow-emerald-900/20 active:scale-[0.99] transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-wait cursor-pointer"
             >
               {isGenerating ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Generating Professional Client Presentation...</span>
+                  <span>
+                    {selectedLanguage === 'gu'
+                      ? 'પ્રોફેશનલ ક્લાયન્ટ પ્રેઝન્ટેશન તૈયાર થઈ રહી છે...'
+                      : selectedLanguage === 'hi'
+                      ? 'व्यावसायिक क्लाइंट प्रेजेंटेशन तैयार हो रही है...'
+                      : 'Generating Professional Client Presentation...'}
+                  </span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-5 h-5 text-emerald-200" />
-                  <span>Generate Client Presentation</span>
+                  <span>
+                    {selectedLanguage === 'gu'
+                      ? 'ક્લાયન્ટ પ્રેઝન્ટેશન જનરેટ કરો (Generate Presentation)'
+                      : selectedLanguage === 'hi'
+                      ? 'क्लाइंट प्रेजेंटेशन जनरेट करें (Generate Presentation)'
+                      : 'Generate Client Presentation'}
+                  </span>
                   <ArrowRight className="w-5 h-5" />
                 </>
               )}
             </button>
             <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-2">
-              Instant generation • Slide editing • PPTX & PDF exports • Private advisor notes never shown to client
+              Instant generation • Single-product focus • PPTX & PDF exports • Private advisor notes never shown to client
             </p>
           </div>
         </div>
@@ -685,6 +861,33 @@ export const PresentationStudioView: React.FC = () => {
                     For: {activePresentation.clientName}
                   </span>
                 )}
+                {activePresentation.businessProfile?.companyName && (
+                  <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                    🏢 {activePresentation.businessProfile.companyName}
+                  </span>
+                )}
+                {activePresentation.businessProfile?.productName && (
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
+                    📦 {activePresentation.businessProfile.productName}
+                  </span>
+                )}
+                {activePresentation.businessProfile?.advisorRole && (
+                  <span className="text-[10px] font-semibold text-slate-500 bg-slate-50 dark:bg-slate-800/80 px-2 py-0.5 rounded-full">
+                    Role: {activePresentation.businessProfile.advisorRole}
+                  </span>
+                )}
+                {(activePresentation.historicalScenarioMode === 'historical_best_case' ||
+                  activePresentation.questionnaireSnapshot?.historicalScenarioMode === 'historical_best_case') && (
+                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                    ⭐ Historical Best-Case Analysis
+                  </span>
+                )}
+                {(activePresentation.historicalScenarioMode === 'historical_and_contractual' ||
+                  activePresentation.questionnaireSnapshot?.historicalScenarioMode === 'historical_and_contractual') && (
+                  <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2.5 py-0.5 rounded-full border border-purple-200 dark:border-purple-800">
+                    ⭐ Historical + Contractual Analysis
+                  </span>
+                )}
                 <span className="text-[10px] text-slate-400">
                   {activePresentation.source === 'ai_api' ? '⚡ AI Tailored' : '🛡️ Advisory Engine'}
                 </span>
@@ -696,6 +899,23 @@ export const PresentationStudioView: React.FC = () => {
 
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+              {/* Primary: Client Report PDF Export (Master Prompt Section 2) */}
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                className="px-4 py-2 text-xs font-extrabold bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white rounded-xl shadow-md shadow-emerald-900/20 transition-all flex items-center space-x-1.5 cursor-pointer"
+                title="Download High-Resolution Client Report PDF"
+              >
+                <Download className="w-4 h-4 text-white" />
+                <span>
+                  {selectedLanguage === 'gu'
+                    ? 'ગ્રાહક રિપોર્ટ PDF ડાઉનલોડ કરો'
+                    : selectedLanguage === 'hi'
+                    ? 'क्लाइंट रिपोर्ट PDF डाउनलोड करें'
+                    : 'Download Client Report (PDF)'}
+                </span>
+              </button>
+
               {/* Fullscreen Presenter */}
               <button
                 type="button"
@@ -706,7 +926,7 @@ export const PresentationStudioView: React.FC = () => {
                 <span>Present</span>
               </button>
 
-              {/* PPTX Export */}
+              {/* PPTX Export (Preserved from existing studio) */}
               <button
                 type="button"
                 onClick={handleExportPptx}
@@ -715,17 +935,6 @@ export const PresentationStudioView: React.FC = () => {
               >
                 <FileText className="w-3.5 h-3.5 text-amber-500" />
                 <span>PPTX</span>
-              </button>
-
-              {/* PDF Export */}
-              <button
-                type="button"
-                onClick={handleExportPdf}
-                className="px-3 py-2 text-xs font-bold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl transition-all flex items-center space-x-1.5"
-                title="Download High-Resolution PDF"
-              >
-                <Download className="w-3.5 h-3.5 text-rose-500" />
-                <span>PDF</span>
               </button>
 
               {/* Single Slide Image */}
@@ -763,71 +972,115 @@ export const PresentationStudioView: React.FC = () => {
             </div>
           </div>
 
-          {/* Slide Navigator Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
-            {activePresentation.slides.map((s, idx) => (
+          {/* View Mode Toggle: Client Report Document vs Slide Deck */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-100 dark:bg-slate-800/80 p-2 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <button
-                key={s.id || idx}
-                onClick={() => setActiveSlideIndex(idx)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center space-x-1.5 ${
-                  activeSlideIndex === idx
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-400'
+                type="button"
+                onClick={() => setViewLayoutMode('report_document')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewLayoutMode === 'report_document'
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/20'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900'
                 }`}
               >
-                <span>#{idx + 1}</span>
-                <span className="hidden sm:inline font-medium text-[11px] truncate max-w-[120px]">
-                  {s.badge}
-                </span>
+                <FileText className="w-3.5 h-3.5" />
+                <span>Client Report View (A4 Document)</span>
               </button>
-            ))}
-          </div>
-
-          {/* Active Slide Display Area */}
-          <div className="relative">
-            <div ref={activeSlideRef}>
-              <SlideCard
-                slide={activePresentation.slides[activeSlideIndex]}
-                advisorSnapshot={activePresentation.advisorSnapshot}
-                totalSlides={activePresentation.slides.length}
-                onEdit={() => setEditingSlide(activePresentation.slides[activeSlideIndex])}
-                onRegenerate={() =>
-                  handleRegenerateSlideWithAI(
-                    'Make this slide more impactful, specific, and client-friendly'
-                  )
-                }
-              />
-            </div>
-
-            {/* Prev / Next Slide Arrows */}
-            <div className="flex items-center justify-between mt-4">
               <button
-                onClick={() => setActiveSlideIndex((prev) => Math.max(0, prev - 1))}
-                disabled={activeSlideIndex === 0}
-                className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+                type="button"
+                onClick={() => setViewLayoutMode('slide_deck')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewLayoutMode === 'slide_deck'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900'
+                }`}
               >
-                <ChevronLeft className="w-4 h-4" />
-                <span>Previous Slide</span>
-              </button>
-
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                Slide {activeSlideIndex + 1} of {activePresentation.slides.length}
-              </span>
-
-              <button
-                onClick={() =>
-                  setActiveSlideIndex((prev) =>
-                    Math.min(activePresentation.slides.length - 1, prev + 1)
-                  )
-                }
-                disabled={activeSlideIndex === activePresentation.slides.length - 1}
-                className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
-              >
-                <span>Next Slide</span>
-                <ChevronRight className="w-4 h-4" />
+                <Layers className="w-3.5 h-3.5" />
+                <span>Slide Deck View (Presentation Slides)</span>
               </button>
             </div>
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-2">
+              {viewLayoutMode === 'report_document'
+                ? '📄 Dense, high-density editorial document'
+                : '📊 16:9 meeting slide cards'}
+            </span>
           </div>
+
+          {viewLayoutMode === 'report_document' ? (
+            <ClientReportDocumentPreview
+              presentation={activePresentation}
+              onDownloadPdf={handleExportPdf}
+            />
+          ) : (
+            <div className="space-y-4">
+              {/* Slide Navigator Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
+                {activePresentation.slides.map((s, idx) => (
+                  <button
+                    key={s.id || idx}
+                    onClick={() => setActiveSlideIndex(idx)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center space-x-1.5 cursor-pointer ${
+                      activeSlideIndex === idx
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-400'
+                    }`}
+                  >
+                    <span>#{idx + 1}</span>
+                    <span className="hidden sm:inline font-medium text-[11px] truncate max-w-[120px]">
+                      {s.badge}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Active Slide Display Area */}
+              <div className="relative">
+                <div ref={activeSlideRef}>
+                  <SlideCard
+                    slide={activePresentation.slides[activeSlideIndex] || activePresentation.slides[0]}
+                    advisorSnapshot={activePresentation.advisorSnapshot}
+                    totalSlides={activePresentation.slides.length}
+                    onEdit={() => setEditingSlide(activePresentation.slides[activeSlideIndex] || activePresentation.slides[0])}
+                    onRegenerate={() =>
+                      handleRegenerateSlideWithAI(
+                        'Make this slide more impactful, specific, and client-friendly'
+                      )
+                    }
+                  />
+                </div>
+
+                {/* Prev / Next Slide Arrows */}
+                <div className="flex items-center justify-between mt-4">
+                  <button
+                    onClick={() => setActiveSlideIndex((prev) => Math.max(0, prev - 1))}
+                    disabled={activeSlideIndex === 0}
+                    className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Previous Slide</span>
+                  </button>
+
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                    Slide {activeSlideIndex + 1} of {activePresentation.slides.length}
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      setActiveSlideIndex((prev) =>
+                        Math.min(activePresentation.slides.length - 1, prev + 1)
+                      )
+                    }
+                    disabled={activeSlideIndex === activePresentation.slides.length - 1}
+                    className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+                  >
+                    <span>Next Slide</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -910,11 +1163,38 @@ export const PresentationStudioView: React.FC = () => {
 
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => exportToPptx(pres)}
+                        onClick={async () => {
+                          setExportNotice('Downloading PowerPoint (.pptx)...');
+                          try {
+                            await exportToPptx(pres);
+                            setExportNotice('PowerPoint (.pptx) downloaded successfully!');
+                            setTimeout(() => setExportNotice(null), 3000);
+                          } catch (err: any) {
+                            setExportNotice(`Export failed: ${err?.message || 'Please try again.'}`);
+                            setTimeout(() => setExportNotice(null), 5000);
+                          }
+                        }}
                         className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                         title="Download PPTX"
                       >
                         <FileText className="w-3.5 h-3.5 text-amber-500" />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setExportNotice('Generating and downloading PDF...');
+                          try {
+                            await exportToPdf([], pres.title, pres);
+                            setExportNotice('PDF document downloaded successfully!');
+                            setTimeout(() => setExportNotice(null), 3000);
+                          } catch (err: any) {
+                            setExportNotice(`PDF export failed: ${err?.message || 'Please try again.'}`);
+                            setTimeout(() => setExportNotice(null), 5000);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        title="Download PDF"
+                      >
+                        <Download className="w-3.5 h-3.5 text-rose-500" />
                       </button>
                       <button
                         onClick={() => deleteFromHistory(pres.id)}
@@ -992,15 +1272,16 @@ export const PresentationStudioView: React.FC = () => {
           style={{
             position: 'fixed',
             left: '-9999px',
-            top: '0',
+            top: 0,
             width: '1280px',
             opacity: 1,
             pointerEvents: 'none',
-            zIndex: -1,
+            zIndex: -9999,
+            overflow: 'hidden',
           }}
         >
           {activePresentation.slides.map((slide) => (
-            <div key={slide.id} style={{ width: '1280px', marginBottom: '24px' }}>
+            <div key={slide.id} style={{ width: '1280px', height: '720px', marginBottom: '24px' }}>
               <SlideCard
                 slide={slide}
                 advisorSnapshot={activePresentation.advisorSnapshot}

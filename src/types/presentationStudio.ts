@@ -2,6 +2,13 @@ import { LanguageCode } from './index';
 
 export type PresentationMode = 'quick' | 'detailed' | 'personalized';
 
+export type HistoricalScenarioMode =
+  | 'standard'
+  | 'historical_best_case'
+  | 'historical_and_contractual';
+
+export type ReportWorkflowType = 'client_report_pdf' | 'standard_deck';
+
 export type PresentationGroupCategory =
   | 'wealth'
   | 'retirement'
@@ -68,6 +75,12 @@ export interface ClientQuestionnaire {
 
   // Optional client identity
   clientName?: string;
+
+  // Optional: Historical Best-Case / Maximum Potential Benefit Scenario
+  historicalScenarioMode?: HistoricalScenarioMode;
+
+  // Report Workflow choice: PDF Client Report (continuous compact) vs Slide Deck
+  workflowType?: ReportWorkflowType;
 
   // Legacy compatibility fields if needed
   clientProfile?: string;
@@ -148,6 +161,21 @@ export interface AdvisorPresentationSnapshot {
   defaultCtaText: string;
 }
 
+export interface HistoricalAnalysisData {
+  mode: HistoricalScenarioMode;
+  title: string;
+  description: string;
+  periodCovered?: string;
+  calculationMethod?: string;
+  benchmarkName?: string;
+  bestReturnPct?: string;
+  illustratedOutcome?: string;
+  guaranteedBenefits?: string[];
+  nonGuaranteedBenefits?: string[];
+  contractualConditions?: string[];
+  statutoryDisclaimer: string;
+}
+
 export interface ClientPresentation {
   id: string;
   title: string;
@@ -159,8 +187,12 @@ export interface ClientPresentation {
   createdAt: string;
   updatedAt: string;
   clientName?: string;
+  workflowType?: ReportWorkflowType;
+  historicalScenarioMode?: HistoricalScenarioMode;
+  historicalAnalysis?: HistoricalAnalysisData;
   advisorPrivateNotes?: string; // Stored securely in presentation record for advisor review, NEVER rendered on slides
   questionnaireSnapshot?: Partial<ClientQuestionnaire>;
+  businessProfile?: import('../constants/advisorSectorsData').AdvisorBusinessProfile;
   advisorSnapshot: AdvisorPresentationSnapshot;
   slides: PresentationSlide[];
   source: 'ai_api' | 'local_engine';

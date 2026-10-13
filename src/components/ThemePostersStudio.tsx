@@ -11,6 +11,7 @@ import {
   LanguageCode,
 } from '../types';
 import { renderThemePosterToCanvas } from '../utils/themePosterRenderer';
+import { downloadCanvasAsPng } from '../utils/downloadHelper';
 import { VideoStatusMaker } from './VideoStatusMaker';
 import {
   Sparkles,
@@ -239,12 +240,8 @@ export const ThemePostersStudio: React.FC<ThemePostersStudioProps> = ({
   // Download high-resolution square PNG
   const handleDownload = () => {
     if (!canvasRef.current) return;
-    const dataUrl = canvasRef.current.toDataURL('image/png', 1.0);
-    const link = document.createElement('a');
     const safeTitle = `${activeThemeDef.indexNumber}-${selectedThemeId}-${selectedSubjectId}`;
-    link.download = `${safeTitle}-square-1x1.png`;
-    link.href = dataUrl;
-    link.click();
+    downloadCanvasAsPng(canvasRef.current, `${safeTitle}-square-1x1.png`);
   };
 
   // Open animated video status maker

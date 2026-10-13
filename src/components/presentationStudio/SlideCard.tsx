@@ -86,7 +86,9 @@ export const SlideCard: React.FC<SlideCardProps> = ({
             <span className="text-emerald-800 font-bold uppercase text-[10px] tracking-wider block mb-0.5 print:text-black">
               Executive Key Insight:
             </span>
-            {slide.keyTakeaway}
+            {typeof slide.keyTakeaway === 'string'
+              ? slide.keyTakeaway
+              : (slide.keyTakeaway as any)?.text || (slide.keyTakeaway as any)?.point || String(slide.keyTakeaway || '')}
           </div>
         )}
       </div>
@@ -97,12 +99,18 @@ export const SlideCard: React.FC<SlideCardProps> = ({
         <div className="md:col-span-7 space-y-2.5">
           {slide.bulletPoints && slide.bulletPoints.length > 0 && (
             <div className="space-y-2">
-              {slide.bulletPoints.map((bullet, idx) => (
-                <div key={idx} className="flex items-start space-x-2 text-xs sm:text-sm text-slate-800 print:text-black leading-relaxed">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0 print:text-black" />
-                  <span>{bullet}</span>
-                </div>
-              ))}
+              {slide.bulletPoints.map((bullet: any, idx) => {
+                const bulletText =
+                  typeof bullet === 'string'
+                    ? bullet
+                    : bullet?.text || bullet?.point || bullet?.description || String(bullet || '');
+                return (
+                  <div key={idx} className="flex items-start space-x-2 text-xs sm:text-sm text-slate-800 print:text-black leading-relaxed">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0 print:text-black" />
+                    <span>{bulletText}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -176,10 +184,10 @@ export const SlideCard: React.FC<SlideCardProps> = ({
               {/* Bar Chart */}
               {slide.chartData.type === 'bar' && (
                 <div className="space-y-2">
-                  {slide.chartData.labels.map((label, i) => {
-                    const val = slide.chartData?.values[i] || 0;
-                    const maxVal = Math.max(...(slide.chartData?.values || [100]));
-                    const pct = Math.min(100, Math.round((val / maxVal) * 100));
+                  {(slide.chartData.labels || []).map((label, i) => {
+                    const val = slide.chartData?.values?.[i] ?? 0;
+                    const maxVal = Math.max(...(slide.chartData?.values || [100]), 1);
+                    const pct = Math.max(2, Math.min(100, Math.round((val / maxVal) * 100)));
                     const secVal = slide.chartData?.secondaryValues?.[i];
 
                     return (
@@ -187,7 +195,8 @@ export const SlideCard: React.FC<SlideCardProps> = ({
                         <div className="flex justify-between text-[11px] font-semibold text-slate-700 print:text-black">
                           <span>{label}</span>
                           <span>
-                            {val} {slide.chartData?.unit}
+                            {typeof val === 'number' && val >= 100000 ? `₹${(val / 100000).toFixed(1)}L` : val}
+                            {slide.chartData?.unit ? ` ${slide.chartData.unit}` : ''}
                             {secVal !== undefined && (
                               <span className="text-slate-500 text-[10px] ml-1">
                                 (Base: {secVal})
@@ -211,30 +220,30 @@ export const SlideCard: React.FC<SlideCardProps> = ({
               {slide.chartData.type === 'donut' && (
                 <div className="space-y-1.5">
                   <div className="w-full h-3.5 rounded-full overflow-hidden flex border border-slate-200 print:border-black">
-                    {slide.chartData.labels.map((_, i) => {
+                    {(slide.chartData.labels || []).map((_, i) => {
                       const colors = [
                         'bg-emerald-600 print:bg-black',
                         'bg-teal-500 print:bg-slate-700',
                         'bg-indigo-600 print:bg-slate-500',
                         'bg-amber-500 print:bg-slate-300',
                       ];
-                      const val = slide.chartData?.values[i] || 0;
+                      const val = slide.chartData?.values?.[i] || 0;
                       return (
                         <div
                           key={i}
                           className={`h-full ${colors[i % colors.length]}`}
                           style={{ width: `${val}%` }}
-                          title={`${slide.chartData?.labels[i]}: ${val}%`}
+                          title={`${slide.chartData?.labels?.[i]}: ${val}%`}
                         />
                       );
                     })}
                   </div>
                   <div className="grid grid-cols-2 gap-1 text-[10px]">
-                    {slide.chartData.labels.map((l, i) => (
+                    {(slide.chartData.labels || []).map((l, i) => (
                       <div key={i} className="flex items-center space-x-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-600 print:bg-black shrink-0" />
                         <span className="text-slate-700 print:text-black truncate">
-                          {l}: <strong>{slide.chartData?.values[i]}%</strong>
+                          {l}: <strong>{slide.chartData?.values?.[i]}%</strong>
                         </span>
                       </div>
                     ))}
@@ -273,19 +282,26 @@ export const SlideCard: React.FC<SlideCardProps> = ({
               <table className="w-full text-left">
                 <thead className="bg-slate-100 text-slate-800 font-bold print:bg-slate-200 print:text-black">
                   <tr>
-                    <th className="p-1.5">{slide.comparisonTable.headers[0]}</th>
-                    <th className="p-1.5 text-emerald-800 print:text-black">{slide.comparisonTable.headers[1]}</th>
-                    <th className="p-1.5 text-slate-600 print:text-black">{slide.comparisonTable.headers[2]}</th>
+                    <th className="p-1.5">{slide.comparisonTable.headers?.[0] || 'Parameter'}</th>
+                    <th className="p-1.5 text-emerald-800 print:text-black">{slide.comparisonTable.headers?.[1] || 'Recommended Option'}</th>
+                    <th className="p-1.5 text-slate-600 print:text-black">{slide.comparisonTable.headers?.[2] || 'Traditional Alternative'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-150">
-                  {slide.comparisonTable.rows.map((row, idx) => (
-                    <tr key={idx} className={row.advantageFor === 'A' ? 'bg-emerald-50/40 print:bg-white' : ''}>
-                      <td className="p-1.5 font-medium text-slate-700 print:text-black">{row.parameter}</td>
-                      <td className="p-1.5 font-bold text-emerald-700 print:text-black">{row.optionA}</td>
-                      <td className="p-1.5 text-slate-600 print:text-black">{row.optionB}</td>
-                    </tr>
-                  ))}
+                  {(slide.comparisonTable.rows || []).map((row: any, idx) => {
+                    const isArr = Array.isArray(row);
+                    const param = isArr ? row[0] : row?.parameter;
+                    const optA = isArr ? row[1] : row?.optionA;
+                    const optB = isArr ? row[2] : row?.optionB;
+                    const isAdvA = !isArr && row?.advantageFor === 'A';
+                    return (
+                      <tr key={idx} className={isAdvA ? 'bg-emerald-50/40 print:bg-white' : ''}>
+                        <td className="p-1.5 font-medium text-slate-700 print:text-black">{param}</td>
+                        <td className="p-1.5 font-bold text-emerald-700 print:text-black">{optA}</td>
+                        <td className="p-1.5 text-slate-600 print:text-black">{optB}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -298,8 +314,43 @@ export const SlideCard: React.FC<SlideCardProps> = ({
                 Personalized Financial Consultation
               </p>
               <p className="text-xs sm:text-sm font-bold">
-                {slide.callToAction}
+                {typeof slide.callToAction === 'string'
+                  ? slide.callToAction
+                  : (slide.callToAction as any)?.text ||
+                    (slide.callToAction as any)?.message ||
+                    (slide.callToAction as any)?.cta ||
+                    'Schedule your personalized 1-on-1 portfolio consultation.'}
               </p>
+              {typeof slide.callToAction === 'object' &&
+                Boolean(
+                  (slide.callToAction as any)?.phone ||
+                    (slide.callToAction as any)?.whatsapp ||
+                    (slide.callToAction as any)?.advisorName ||
+                    (slide.callToAction as any)?.email
+                ) && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1.5 border-t border-emerald-800/80 text-[11px] text-emerald-200">
+                    {(slide.callToAction as any).advisorName && (
+                      <span className="font-semibold">{(slide.callToAction as any).advisorName}</span>
+                    )}
+                    {(slide.callToAction as any).role && (
+                      <span className="opacity-80">({(slide.callToAction as any).role})</span>
+                    )}
+                    {(slide.callToAction as any).phone && (
+                      <span>📞 {(slide.callToAction as any).phone}</span>
+                    )}
+                    {(slide.callToAction as any).whatsapp && (
+                      <span>💬 {(slide.callToAction as any).whatsapp}</span>
+                    )}
+                    {(slide.callToAction as any).email && (
+                      <span>✉️ {(slide.callToAction as any).email}</span>
+                    )}
+                    {(slide.callToAction as any).license && (
+                      <span className="text-[10px] opacity-75">
+                        [{(slide.callToAction as any).license}]
+                      </span>
+                    )}
+                  </div>
+                )}
             </div>
           )}
         </div>
@@ -347,7 +398,13 @@ export const SlideCard: React.FC<SlideCardProps> = ({
 
       {/* Statutory Disclaimer Band */}
       <div className="mt-1 text-[9px] text-slate-400 italic line-clamp-1 print:text-black">
-        {slide.assumptions?.[0] || advisorSnapshot.disclaimer}
+        {typeof slide.assumptions?.[0] === 'string'
+          ? slide.assumptions[0]
+          : (slide.assumptions?.[0] as any)?.text ||
+            (typeof advisorSnapshot.disclaimer === 'string'
+              ? advisorSnapshot.disclaimer
+              : (advisorSnapshot.disclaimer as any)?.text ||
+                'Past performance does not guarantee future results. Terms subject to official documents.')}
       </div>
     </div>
   );

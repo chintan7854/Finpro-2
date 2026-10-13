@@ -8,6 +8,8 @@ import {
 } from '../types/presentationStudio';
 import { PRESENTATION_SUBJECTS_LIST } from '../constants/presentationSubjects';
 
+import { AdvisorBusinessProfile } from '../constants/advisorSectorsData';
+
 export interface GeneratePresentationRequest {
   topicPrompt?: string;
   subjectId?: string;
@@ -17,27 +19,130 @@ export interface GeneratePresentationRequest {
   clientName?: string;
   questionnaire: ClientQuestionnaire;
   advisorProfile: AdvisorProfile;
+  businessProfile?: AdvisorBusinessProfile;
 }
 
-export function createAdvisorSnapshot(profile: AdvisorProfile): AdvisorPresentationSnapshot {
+export function createAdvisorSnapshot(profile?: AdvisorProfile, businessProfile?: AdvisorBusinessProfile): AdvisorPresentationSnapshot {
+  const p = profile || ({} as any);
   return {
-    name: profile.advisorName || 'Financial Advisor',
-    designation: profile.designation || 'Certified Financial Planner & AMFI Registered Distributor',
-    phone: profile.phoneNumber || '+91 98250 12345',
-    whatsapp: profile.whatsappNumber || profile.phoneNumber || '+91 98250 12345',
-    email: profile.email || 'advisor@finwealthadvisors.in',
-    location: profile.location || 'India',
-    website: profile.website || '',
-    professionalLicense: profile.professionalDetails || 'AMFI Registered Mutual Fund Distributor',
-    achievement: profile.achievement || 'Managing High-Trust Client Portfolios',
-    photo: profile.profilePhoto,
-    logo: profile.logo,
+    name: p.advisorName || 'Financial Advisor',
+    designation: businessProfile?.advisorRole || p.designation || 'Certified Financial Planner & AMFI Registered Distributor',
+    phone: p.phoneNumber || '+91 98250 12345',
+    whatsapp: p.whatsappNumber || p.phoneNumber || '+91 98250 12345',
+    email: p.email || 'advisor@finwealthadvisors.in',
+    location: p.location || 'India',
+    website: p.website || '',
+    professionalLicense: businessProfile?.authorizationIdentifier || p.professionalDetails || 'AMFI Registered Mutual Fund Distributor',
+    achievement: p.achievement || 'Managing High-Trust Client Portfolios',
+    photo: p.profilePhoto,
+    logo: p.logo,
     disclaimer:
-      profile.defaultDisclaimer ||
+      p.defaultDisclaimer ||
       'Mutual fund investments are subject to market risks, read all scheme related documents carefully. Past performance is not indicative of future returns.',
     defaultCtaText:
-      profile.defaultCTA ||
+      p.defaultCTA ||
       'Schedule your confidential 1-on-1 financial portfolio review today.',
+  };
+}
+
+export function sanitizePresentationSlide(s: any, idx?: number, language?: LanguageCode): PresentationSlide {
+  const slideNumber = typeof s?.slideNumber === 'number' ? s.slideNumber : (idx !== undefined ? idx + 1 : 1);
+  const badge = typeof s?.badge === 'string' && s.badge.trim()
+    ? s.badge.trim()
+    : slideNumber === 1
+    ? (language === 'gu' ? 'મુખ્ય આયોજન' : language === 'hi' ? 'मुख्य योजना' : 'Overview')
+    : (language === 'gu' ? `સ્લાઇડ #${slideNumber}` : language === 'hi' ? `स्लाइड #${slideNumber}` : `Slide #${slideNumber}`);
+
+  let callToAction = s?.callToAction;
+  if (callToAction && typeof callToAction === 'object') {
+    callToAction =
+      callToAction.text ||
+      callToAction.message ||
+      callToAction.cta ||
+      (callToAction.phone || callToAction.whatsapp
+        ? `Consultation: ${callToAction.advisorName || 'Financial Advisor'} (Tel: ${callToAction.phone || callToAction.whatsapp})`
+        : 'Schedule your personalized 1-on-1 portfolio review today.');
+  }
+
+  const bulletPoints = Array.isArray(s?.bulletPoints)
+    ? s.bulletPoints.map((bp: any) => {
+        if (typeof bp === 'string') return bp;
+        if (bp && typeof bp === 'object') {
+          return bp.text || bp.point || bp.description || bp.title || Object.values(bp).filter(v => typeof v === 'string').join(' - ');
+        }
+        return String(bp || '');
+      })
+    : [];
+
+  const keyTakeaway = typeof s?.keyTakeaway === 'string'
+    ? s.keyTakeaway
+    : s?.keyTakeaway?.text || s?.keyTakeaway?.point || String(s?.keyTakeaway || '');
+
+  const title = typeof s?.title === 'string' ? s.title : String(s?.title?.text || s?.title || `Slide ${slideNumber}`);
+  const subtitle = typeof s?.subtitle === 'string' ? s.subtitle : String(s?.subtitle?.text || s?.subtitle || '');
+
+  let comparisonTable = s?.comparisonTable;
+  if (comparisonTable && Array.isArray(comparisonTable.rows)) {
+    comparisonTable = {
+      headers: Array.isArray(comparisonTable.headers) ? comparisonTable.headers : ['Feature', 'Recommended', 'Alternative'],
+      rows: comparisonTable.rows.map((row: any) => {
+        if (Array.isArray(row)) {
+          return {
+            parameter: String(row[0] || ''),
+            optionA: String(row[1] || ''),
+            optionB: String(row[2] || ''),
+          };
+        }
+        return {
+          parameter: typeof row?.parameter === 'string' ? row.parameter : String(row?.parameter?.text || row?.parameter || ''),
+          optionA: typeof row?.optionA === 'string' ? row.optionA : String(row?.optionA?.text || row?.optionA || ''),
+          optionB: typeof row?.optionB === 'string' ? row.optionB : String(row?.optionB?.text || row?.optionB || ''),
+        };
+      }),
+    };
+  }
+
+  const risksAndLimitations = Array.isArray(s?.risksAndLimitations)
+    ? s.risksAndLimitations.map((r: any) => typeof r === 'string' ? r : String(r?.text || r?.risk || ''))
+    : undefined;
+
+  const assumptions = Array.isArray(s?.assumptions)
+    ? s.assumptions.map((a: any) => typeof a === 'string' ? a : String(a?.text || ''))
+    : undefined;
+
+  const metrics = Array.isArray(s?.metrics)
+    ? s.metrics.map((m: any) => ({
+        label: typeof m?.label === 'string' ? m.label : String(m?.label?.text || m?.label || ''),
+        value: typeof m?.value === 'string' || typeof m?.value === 'number' ? String(m.value) : String(m?.value?.text || m?.value || ''),
+        helper: m?.helper ? (typeof m.helper === 'string' ? m.helper : String(m?.helper?.text || m?.helper || '')) : undefined,
+      }))
+    : undefined;
+
+  return {
+    ...s,
+    id: s?.id || `slide_${slideNumber}_${Date.now()}_${idx ?? 0}`,
+    slideNumber,
+    badge,
+    title,
+    subtitle,
+    keyTakeaway,
+    bulletPoints,
+    metrics,
+    risksAndLimitations,
+    assumptions,
+    comparisonTable,
+    callToAction: callToAction ? String(callToAction) : undefined,
+  };
+}
+
+export function sanitizeClientPresentation(pres: any): ClientPresentation {
+  if (!pres || typeof pres !== 'object') return pres;
+  const slides = Array.isArray(pres.slides)
+    ? pres.slides.map((s: any, idx: number) => sanitizePresentationSlide(s, idx, pres.language))
+    : [];
+  return {
+    ...pres,
+    slides,
   };
 }
 
@@ -51,14 +156,21 @@ export async function generateClientPresentation(
     mode,
     language,
     clientName,
-    questionnaire,
+    questionnaire = {} as any,
     advisorProfile,
+    businessProfile,
   } = params;
 
   const foundSubject = PRESENTATION_SUBJECTS_LIST.find((s) => s.id === subjectId);
+  const companyAndProduct = businessProfile?.companyName && businessProfile?.productName
+    ? `${businessProfile.companyName} — ${businessProfile.productName}`
+    : businessProfile?.productName || businessProfile?.companyName || '';
+
   const subjectTitle =
     topicPrompt?.trim()
       ? topicPrompt.trim().slice(0, 60) + (topicPrompt.trim().length > 60 ? '...' : '')
+      : companyAndProduct
+      ? companyAndProduct
       : language === 'gu'
       ? foundSubject?.titleGu || foundSubject?.title || 'નાણાકીય આયોજન'
       : language === 'hi'
@@ -68,13 +180,17 @@ export async function generateClientPresentation(
   const subCat = foundSubject?.subcategories.find((sc) => sc.id === subCategoryId);
   const subCategoryTitle = subCat?.title || 'Tailored Financial Blueprint';
 
-  const advisorSnapshot = createAdvisorSnapshot(advisorProfile);
+  const advisorSnapshot = createAdvisorSnapshot(advisorProfile, businessProfile);
 
-  // Try calling the AI backend endpoint first
+  // Try calling the AI backend endpoint with 10-second fail-safe timeout
   try {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 50000) : null;
+
     const response = await fetch('/api/generate-presentation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller?.signal,
       body: JSON.stringify({
         topicPrompt: topicPrompt?.trim() || undefined,
         subjectId,
@@ -83,6 +199,9 @@ export async function generateClientPresentation(
         mode,
         language,
         clientName: clientName?.trim() || questionnaire.clientName?.trim() || undefined,
+        businessProfile,
+        historicalScenarioMode: questionnaire.historicalScenarioMode || 'standard',
+        workflowType: questionnaire.workflowType || 'client_report_pdf',
         questionnaire: {
           clientRelationship: questionnaire.clientRelationship,
           clientGoals: questionnaire.clientGoals,
@@ -92,6 +211,8 @@ export async function generateClientPresentation(
           hesitationReasons: questionnaire.hesitationReasons,
           preferredStyle: questionnaire.preferredStyle,
           emphasisPoints: questionnaire.emphasisPoints,
+          historicalScenarioMode: questionnaire.historicalScenarioMode,
+          workflowType: questionnaire.workflowType,
           additionalNotes: questionnaire.additionalNotes || questionnaire.advisorPrivateNotes,
         },
         advisorProfile: {
@@ -108,14 +229,44 @@ export async function generateClientPresentation(
       }),
     });
 
+    if (timeoutId) clearTimeout(timeoutId);
+
     if (response.ok) {
       const result = await response.json();
       if (result.success && result.data && Array.isArray(result.data.slides) && result.data.slides.length > 0) {
-        const formattedSlides: PresentationSlide[] = result.data.slides.map((s: any, idx: number) => ({
-          ...s,
-          id: `slide_${idx + 1}_${Date.now()}`,
-          slideNumber: idx + 1,
-        }));
+        const formattedSlides: PresentationSlide[] = result.data.slides.map((s: any, idx: number) => {
+          const slideNumber = s.slideNumber || idx + 1;
+          const badge = s.badge || (
+            slideNumber === 1
+              ? (language === 'gu' ? 'મુખ્ય આયોજન' : language === 'hi' ? 'मुख्य योजना' : 'Overview')
+              : (language === 'gu' ? `સ્લાઇડ #${slideNumber}` : language === 'hi' ? `स्लाइड #${slideNumber}` : `Slide #${slideNumber}`)
+          );
+
+          let comparisonTable = s.comparisonTable;
+          if (comparisonTable && Array.isArray(comparisonTable.rows)) {
+            comparisonTable = {
+              headers: Array.isArray(comparisonTable.headers) ? comparisonTable.headers : ['Feature', 'Recommended', 'Alternative'],
+              rows: comparisonTable.rows.map((row: any) => {
+                if (Array.isArray(row)) {
+                  return {
+                    parameter: String(row[0] || ''),
+                    optionA: String(row[1] || ''),
+                    optionB: String(row[2] || ''),
+                  };
+                }
+                return row;
+              }),
+            };
+          }
+
+          return sanitizePresentationSlide({
+            ...s,
+            id: `slide_${slideNumber}_${Date.now()}_${idx}`,
+            slideNumber,
+            badge,
+            comparisonTable,
+          }, idx, language);
+        });
 
         return {
           id: `pres_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -128,11 +279,14 @@ export async function generateClientPresentation(
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           clientName: clientName?.trim() || questionnaire.clientName?.trim() || undefined,
+          historicalScenarioMode: questionnaire.historicalScenarioMode || 'standard',
+          workflowType: questionnaire.workflowType || 'client_report_pdf',
           advisorPrivateNotes:
             questionnaire.additionalNotes?.trim() ||
             questionnaire.advisorPrivateNotes?.trim() ||
             undefined,
           questionnaireSnapshot: questionnaire,
+          businessProfile,
           advisorSnapshot,
           slides: formattedSlides,
           source: 'ai_api',
@@ -154,11 +308,12 @@ export async function generateClientPresentation(
     clientName: clientName?.trim() || questionnaire.clientName?.trim() || undefined,
     questionnaire,
     advisorSnapshot,
+    businessProfile,
   });
 }
 
 // Local fallback engine generating comprehensive, accurate slides
-function generateLocalPresentation(opts: {
+export function generateLocalPresentation(opts: {
   topicPrompt?: string;
   subjectId: string;
   subjectTitle: string;
@@ -168,6 +323,7 @@ function generateLocalPresentation(opts: {
   clientName?: string;
   questionnaire: ClientQuestionnaire;
   advisorSnapshot: AdvisorPresentationSnapshot;
+  businessProfile?: AdvisorBusinessProfile;
 }): ClientPresentation {
   const {
     topicPrompt,
@@ -177,12 +333,16 @@ function generateLocalPresentation(opts: {
     clientName,
     questionnaire,
     advisorSnapshot,
+    businessProfile,
   } = opts;
 
   const isGu = language === 'gu';
   const isHi = language === 'hi';
 
-  const promptText = (topicPrompt || opts.subjectTitle || '').toLowerCase();
+  const companyName = businessProfile?.companyName || '';
+  const productName = businessProfile?.productName || '';
+
+  const promptText = (topicPrompt || opts.subjectTitle || `${companyName} ${productName}`).toLowerCase();
 
   // Detect domain
   const isTermLife =
@@ -194,6 +354,7 @@ function generateLocalPresentation(opts: {
   const isHealth =
     promptText.includes('health') ||
     promptText.includes('mediclaim') ||
+    promptText.includes('reassure') ||
     promptText.includes('top-up') ||
     promptText.includes('top up') ||
     promptText.includes('મેડિક્લેમ') ||
@@ -232,7 +393,11 @@ function generateLocalPresentation(opts: {
 
   // Derive presentation titles
   let presTitle = 'Strategic Financial Advisory Blueprint';
-  if (topicPrompt && topicPrompt.trim().length > 5) {
+  if (productName && companyName) {
+    presTitle = `${productName} — ${companyName}`;
+  } else if (productName) {
+    presTitle = `${productName} — Recommendation`;
+  } else if (topicPrompt && topicPrompt.trim().length > 5) {
     presTitle = topicPrompt.trim().slice(0, 65) + (topicPrompt.trim().length > 65 ? '...' : '');
   } else if (isTermLife) {
     presTitle = isGu ? 'ટર્મ ઇન્સ્યોરન્સ + SIP વિરુદ્ધ પરંપરાગત પોલિસી' : isHi ? 'प्योर टर्म इंश्योरेंस + SIP बनाम पारंपरिक एंडोवमेंट' : 'Pure Term Life + Mutual Fund SIP Blueprint';
@@ -575,6 +740,110 @@ function generateLocalPresentation(opts: {
     });
   }
 
+  // Historical Best-Case / Maximum Potential Benefit Scenario Slide (Master Prompt Section 5)
+  if (
+    questionnaire.historicalScenarioMode === 'historical_best_case' ||
+    questionnaire.historicalScenarioMode === 'historical_and_contractual'
+  ) {
+    const isContractual = questionnaire.historicalScenarioMode === 'historical_and_contractual';
+    const histSlideNum = slides.length + 1;
+
+    if (isTermLife) {
+      slides.push({
+        id: `slide_hist_${Date.now()}`,
+        slideNumber: histSlideNum,
+        slideType: 'concept',
+        badge: isGu ? 'કરાર આધારિત લાભ વિશ્લેષણ' : isHi ? 'संविदात्मक लाभ विश्लेषण' : 'Contractual Benefit Analysis',
+        title: isGu
+          ? 'મહત્તમ કરાર આધારિત સુરક્ષા વિ. બિન-ગેરંટીડ બોનસ'
+          : isHi
+          ? 'अधिकतम संविदात्मक सुरक्षा बनाम गैर-गारंटीशुदा बोनस'
+          : 'Contractual Guaranteed Cover vs Non-Guaranteed Benefits',
+        subtitle: isGu
+          ? 'પૉલિસીના સત્તાવાર નિયમો મુજબ ગેરંટીડ સમ એશ્યોર્ડ અને IRDAI ગાઈડલાઈન્સ'
+          : 'Guaranteed Sum Assured under official policy terms & IRDAI illustrations',
+        keyTakeaway: isGu
+          ? 'જીવન વીમો એ કુટુંબના નાણાકીય જોખમનું રિપ્લેસમેન્ટ છે, ક્યારેય રોકાણ નફો નથી.'
+          : 'Life insurance is pure financial risk replacement and protection, NEVER an investment profit tool.',
+        bulletPoints: [
+          isGu
+            ? 'ગેરંટીડ ડેથ બેનિફિટ (સમ એશ્યોર્ડ): ₹1,00,00,000 (કરમુક્ત કલમ 10(10D) હેઠળ ઉપલબ્ધ).'
+            : 'Guaranteed Sum Assured: ₹1,00,00,000 death benefit guaranteed by insurance contract.',
+          isGu
+            ? 'પ્યોર ટર્મ પ્લાનમાં કોઈ મેચ્યોરિટી નથી; બચત પ્રીમિયમ SIP માં ફાળવીને સંપત્તિનું સર્જન થાય છે.'
+            : 'Pure term plan has ₹0 maturity return; premium savings are preserved via parallel SIP.',
+          isContractual
+            ? (isGu
+                ? 'બિન-ગેરંટીડ બોનસ (ટ્રેડિશનલ પૉલિસી): IRDAI 4% અને 8% અનુમાન માત્ર કાલ્પનિક ચિત્રણ છે.'
+                : 'Non-guaranteed returns (Traditional endowment): IRDAI 4% & 8% illustrations are hypothetical.')
+            : (isGu
+                ? 'વાર્ષિક પ્રીમિયમ વય અને આરોગ્ય આધારિત છે; મેડિકલ ઘોષણા 100% સચોટ હોવી અનિવાર્ય છે.'
+                : 'Annual premium depends on age, smoking status, and mandatory truthful health disclosures.'),
+        ],
+        metrics: [
+          { label: isGu ? 'ગેરંટીડ કવર' : 'Guaranteed Cover', value: '₹1.00 Cr', helper: 'Contractual' },
+          { label: isGu ? 'ટર્મ પ્રીમિયમ' : 'Term Premium', value: '₹14,500/yr', helper: 'Approximate' },
+          { label: isGu ? 'સ્પ્લિટ SIP સંભાવના' : 'Split SIP Potential', value: '₹1.98 Cr @ 20y', helper: 'Market Linked' },
+        ],
+        assumptions: [
+          'Statutory Disclosure: Life cover is guaranteed upon valid premium payments and subject to 100% accurate disclosures. Sum assured is paid on demise.',
+        ],
+      });
+    } else {
+      // SIP / Mutual Fund / Wealth default
+      slides.push({
+        id: `slide_hist_${Date.now()}`,
+        slideNumber: histSlideNum,
+        slideType: 'concept',
+        badge: isGu ? 'ઐતિહાસિક શ્રેષ્ઠ વળતર વિશ્લેષણ' : isHi ? 'ऐतिहासिक सर्वश्रेष्ठ विश्लेषण' : 'Historical Best-Case Analysis',
+        title: isGu
+          ? 'ઐતિહાસિક શ્રેષ્ઠ બજાર ચક્ર અને વાસ્તવિક પાયાનું વિશ્લેષણ'
+          : isHi
+          ? 'ऐतिहासिक सर्वश्रेष्ठ बाजार चक्र एवं आधारभूत विश्लेषण'
+          : 'Historical Best-Case Market Cycles vs Realistic Baseline',
+        subtitle: isGu
+          ? 'નિફ્ટી 500 TRI / ફ્લેક્સી કેપ ઇન્ડેક્સનો ચકાસાયેલ 15-વર્ષનો શ્રેષ્ઠ ટ્રેક રેકોર્ડ'
+          : 'Verified 15-Year Indian equity benchmark data (Nifty 500 Total Returns Index)',
+        keyTakeaway: isGu
+          ? 'ઐતિહાસિક ટોચનું વળતર એ માત્ર સંદર્ભ માટે છે, તે ભવિષ્યની કોઈ ગેરંટી નથી.'
+          : 'Historical best-case outcomes reflect verified past market cycles and are NEVER a future guarantee.',
+        bulletPoints: [
+          isGu
+            ? 'ચકાસાયેલ ઐતિહાસિક શ્રેષ્ઠ 15-વર્ષ SIP CAGR: ~17.8% (2003 થી 2018 ભારતનું ઐતિહાસિક તેજી અને રિકવરી ચક્ર).'
+            : 'Verified 15-Year Rolling SIP Historical Best: ~17.8% CAGR across 2003–2018 Indian market cycle.',
+          isGu
+            ? 'રૂઢિચુસ્ત આયોજન માટે 12.0% વાર્ષિક વળતર આધાર માનવામાં આવે છે, જે ફુગાવા સામે સંપત્તિનું સર્જન કરે છે.'
+            : 'Realistic baseline planning benchmark: 12.0% CAGR illustrative compounding assumption.',
+          isContractual
+            ? (isGu
+                ? 'કરાર આધારિત સ્થિતિ: મ્યુચ્યુઅલ ફંડ બજાર-લિંક્ડ છે; તેમાં કોઈ નિશ્ચિત નફાની ગેરંટી નથી.'
+                : 'Contractual status: Mutual funds are market-linked instruments without guaranteed minimum returns.')
+            : (isGu
+                ? 'સમયગાળો અને શિસ્ત: બજારની વોલેટિલિટીને પાર કરવા 7 થી 10+ વર્ષનો સમયગાળો અનિવાર્ય છે.'
+                : 'Duration & Discipline: Equity compounding requires remaining invested through 7-10+ year complete cycles.'),
+        ],
+        metrics: [
+          { label: isGu ? 'ઐતિહાસિક શ્રેષ્ઠ (15-yr)' : 'Historical Best (15-yr)', value: '17.8% CAGR', helper: 'Nifty 500 TRI' },
+          { label: isGu ? 'આયોજન બેઝલાઇન' : 'Planning Baseline', value: '12.0% CAGR', helper: 'Illustrative' },
+          { label: isGu ? 'ગેરંટીડ વળતર' : 'Guaranteed Returns', value: '0% (Market Linked)', helper: 'SEBI Regulated' },
+        ],
+        chartData: {
+          type: 'bar',
+          title: isGu ? 'ઐતિહાસિક શ્રેષ્ઠ વિ. પ્રમાણભૂત દૃશ્ય (₹10,000/માસિક - 15 વર્ષ)' : 'Historical Best vs Baseline Scenarios (₹10,000/mo - 15 Yrs)',
+          labels: ['Total Invested', 'Baseline @ 12%', 'Historical Peak @ 17.8%'],
+          values: [1800000, 5045000, 9350000],
+          unit: '₹',
+          explanation: isGu
+            ? 'ઐતિહાસિક ટોચ 2003-2018 દરમિયાન નોંધાઈ હતી. વાસ્તવિક રોકાણ આયોજન માટે 12% નો ઉપયોગ સલાહભર્યો છે.'
+            : 'Historical best occurred during 2003-2018 bull phase. 12% baseline remains the recommended planning basis.',
+        },
+        assumptions: [
+          'Mandatory Compliance: Mutual fund investments are subject to market risks. Read all scheme related documents carefully. Past performance does not guarantee future results.',
+        ],
+      });
+    }
+  }
+
   // Final Slide: Conclusion & Advisor Contact CTA
   const finalNum = slides.length + 1;
   slides.push({
@@ -606,11 +875,14 @@ function generateLocalPresentation(opts: {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     clientName: clientName?.trim() || undefined,
+    historicalScenarioMode: questionnaire.historicalScenarioMode || 'standard',
+    workflowType: questionnaire.workflowType || 'client_report_pdf',
     advisorPrivateNotes:
       questionnaire.additionalNotes?.trim() ||
       questionnaire.advisorPrivateNotes?.trim() ||
       undefined,
     questionnaireSnapshot: questionnaire,
+    businessProfile,
     advisorSnapshot,
     slides,
     source: 'local_engine',

@@ -20,6 +20,7 @@ import {
   UserCheck,
   RotateCcw,
   CheckCircle2,
+  FileText,
 } from 'lucide-react';
 
 interface QuestionnaireFormProps {
@@ -166,6 +167,207 @@ export const QuestionnaireForm: React.FC<QuestionnaireFormProps> = ({
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               Tailored specifically to the client's objections, budget numbers, family goals, and custom priorities.
+            </p>
+          </button>
+        </div>
+      </div>
+
+      {/* Workflow & Report Type Selector (Master Prompt Section 2) */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
+              <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              {language === 'gu'
+                ? 'રિપોર્ટ વર્કફ્લો ફોર્મેટ (Report Output Workflow)'
+                : language === 'hi'
+                ? 'रिपोर्ट वर्कफ़्लो प्रारूप (Report Output Workflow)'
+                : 'Report Output Workflow'}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {language === 'gu'
+                ? 'ગ્રાહક-તૈયાર નાણાકીય પ્રોડક્ટ રિપોર્ટ ફક્ત PDF માં અથવા સ્લાઇડ ડેક'
+                : language === 'hi'
+                ? 'क्लाइंट-तैयार वित्तीय उत्पाद रिपोर्ट केवल PDF में या स्लाइड डेक'
+                : 'Choose official Client PDF Report or interactive slide deck'}
+            </p>
+          </div>
+          <span className="self-start sm:self-auto text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
+            {(questionnaire.workflowType || 'client_report_pdf') === 'client_report_pdf'
+              ? (language === 'gu' ? '📄 ક્લાયન્ટ રિપોર્ટ (PDF Only)' : '📄 Client Report (PDF Only)')
+              : (language === 'gu' ? '📊 પ્રેઝન્ટેશન ડેક (PPTX / Slides)' : '📊 Slide Deck (PPTX & Slides)')}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => updateField('workflowType', 'client_report_pdf')}
+            className={`p-3.5 rounded-xl text-left border transition-all ${
+              (questionnaire.workflowType || 'client_report_pdf') === 'client_report_pdf'
+                ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-600 ring-2 ring-emerald-600/20 shadow-xs'
+                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-emerald-600" />
+                {language === 'gu'
+                  ? 'ગ્રાહક પ્રોડક્ટ રિપોર્ટ (PDF Deliverable)'
+                  : language === 'hi'
+                  ? 'क्लाइंट प्रोडक्ट रिपोर्ट (PDF Deliverable)'
+                  : 'Client Product Report (PDF Deliverable)'}
+              </span>
+              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded-md">
+                Master Prompt
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'gu'
+                ? 'ગ્રાહક માટે સચોટ, વ્યવસાયિક નાણાકીય પ્રોડક્ટ રિપોર્ટ. ફાઈનલ આઉટપુટ ફક્ત PDF ફોર્મેટમાં તૈયાર થાય છે.'
+                : language === 'hi'
+                ? 'क्लाइंट के लिए सटीक, पेशेवर वित्तीय उत्पाद रिपोर्ट। अंतिम परिणाम केवल PDF प्रारूप में तैयार होता है।'
+                : 'Structured, educational financial product advisory report delivering high-resolution client-ready PDF.'}
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => updateField('workflowType', 'standard_deck')}
+            className={`p-3.5 rounded-xl text-left border transition-all ${
+              questionnaire.workflowType === 'standard_deck'
+                ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-600 ring-2 ring-indigo-600/20 shadow-xs'
+                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                {language === 'gu'
+                  ? 'ઇન્ટરેક્ટિવ સ્લાઇડ ડેક (PPTX / Slides)'
+                  : language === 'hi'
+                  ? 'इंटरएक्टिव स्लाइड डेक (PPTX / Slides)'
+                  : 'Interactive Slide Deck (PPTX & Slides)'}
+              </span>
+              <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                Standard Deck
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'gu'
+                ? 'મીટિંગ પ્રેઝન્ટેશન માટે સ્લાઇડ ડેક, પાવરપોઇન્ટ (.pptx) એક્સપોર્ટ અને લાઇવ પ્રસ્તુતિ મોડ સાથે.'
+                : language === 'hi'
+                ? 'मीटिंग प्रेजेंटेशन के लिए स्लाइड डेक, पावरपॉइंट (.pptx) एक्सपोर्ट और लाइव प्रेजेंटर मोड सहित।'
+                : 'Meeting presentation slides supporting PowerPoint (.pptx) download, slide presenter mode & cards.'}
+            </p>
+          </button>
+        </div>
+      </div>
+
+      {/* Historical Best-Case / Maximum Potential Benefit Scenario (Master Prompt Section 5) */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              {language === 'gu'
+                ? 'ઐતિહાસિક શ્રેષ્ઠ વળતર / મહત્તમ સંભવિત લાભ દૃશ્ય (Historical Best-Case Scenario)'
+                : language === 'hi'
+                ? 'ऐतिहासिक सर्वश्रेष्ठ / अधिकतम संभावित लाभ परिदृश्य (Historical Best-Case Scenario)'
+                : 'Historical Best-Case / Maximum Potential Benefit Scenario'}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {language === 'gu'
+                ? 'પસંદ કરેલા પ્રોડક્ટ માટે ચોક્કસ ઐતિહાસિક અથવા કરાર આધારિત ગણતરી પસંદ કરો (ઓપ્શનલ)'
+                : language === 'hi'
+                ? 'चयनित उत्पाद के लिए विशिष्ट ऐतिहासिक या संविदात्मक गणना चुनें (वैकल्पिक)'
+                : 'Optional analysis tailored to product category, separating past cycles & contractual benefits'}
+            </p>
+          </div>
+          <span className="self-start sm:self-auto text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 px-2.5 py-1 rounded-full border border-amber-200 dark:border-amber-800">
+            {language === 'gu' ? 'ચકાસાયેલ ડેટા અને ડિસ્ક્લેમર' : 'Verified Data & Disclaimers'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Choice A: Standard Presentation */}
+          <button
+            type="button"
+            onClick={() => updateField('historicalScenarioMode', 'standard')}
+            className={`p-3.5 rounded-xl text-left border transition-all ${
+              (questionnaire.historicalScenarioMode || 'standard') === 'standard'
+                ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-600 ring-2 ring-blue-600/20 shadow-xs'
+                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                {language === 'gu' ? 'A. પ્રમાણભૂત રજૂઆત' : language === 'hi' ? 'A. मानक प्रस्तुति' : 'A. Standard Presentation'}
+              </span>
+              <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 px-1.5 py-0.5 rounded">
+                Default
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'gu'
+                ? 'વાસ્તવિક પાયાની ગણતરીઓ (SIP: 12%, વીમો: HLV સુરક્ષા, લોન: પ્રમાણભૂત EMI).'
+                : language === 'hi'
+                ? 'यथार्थवादी आधारभूत गणनाएँ (SIP: 12%, बीमा: HLV सुरक्षा, ऋण: मानक EMI)।'
+                : 'Realistic baseline calculations and standard suitability illustrations.'}
+            </p>
+          </button>
+
+          {/* Choice B: Historical Best-Case Analysis */}
+          <button
+            type="button"
+            onClick={() => updateField('historicalScenarioMode', 'historical_best_case')}
+            className={`p-3.5 rounded-xl text-left border transition-all ${
+              questionnaire.historicalScenarioMode === 'historical_best_case'
+                ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/20 shadow-xs'
+                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                {language === 'gu' ? 'B. ઐતિહાસિક શ્રેષ્ઠ વિશ્લેષણ' : language === 'hi' ? 'B. ऐतिहासिक सर्वश्रेष्ठ विश्लेषण' : 'B. Historical Best-Case'}
+              </span>
+              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded">
+                Historical
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'gu'
+                ? 'ચકાસાયેલ ઐતિહાસિક ટોચના બજાર ચક્ર (દા.ત. 15-વર્ષ SIP બેસ્ટ 17.8% CAGR) સાથે કડક ડિસ્ક્લેમર.'
+                : language === 'hi'
+                ? 'सत्यापित ऐतिहासिक शीर्ष बाजार चक्र (उदा. 15-वर्ष SIP सर्वश्रेष्ठ 17.8% CAGR) सख्त डिस्क्लेमर के साथ।'
+                : 'Verified past market peak cycles (e.g. 15-yr rolling SIP @ 17.8%) with strict non-guarantee disclosures.'}
+            </p>
+          </button>
+
+          {/* Choice C: Historical Best-Case Plus Maximum Contractual Benefit */}
+          <button
+            type="button"
+            onClick={() => updateField('historicalScenarioMode', 'historical_and_contractual')}
+            className={`p-3.5 rounded-xl text-left border transition-all ${
+              questionnaire.historicalScenarioMode === 'historical_and_contractual'
+                ? 'bg-purple-50/80 dark:bg-purple-950/40 border-purple-600 ring-2 ring-purple-600/20 shadow-xs'
+                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                {language === 'gu' ? 'C. ઐતિહાસિક + કરાર આધારિત લાભ' : language === 'hi' ? 'C. ऐतिहासिक + संविदात्मक लाभ' : 'C. Historical + Contractual'}
+              </span>
+              <span className="text-[10px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-1.5 py-0.5 rounded">
+                Comprehensive
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'gu'
+                ? 'ઐતિહાસિક વિશ્લેષણ ઉપરાંત ગેરંટીડ કરાર લાભો (વીમા સમ એશ્યોર્ડ, IRDAI બોનસ) ની અલગ સ્પષ્ટતા.'
+                : language === 'hi'
+                ? 'ऐतिहासिक विश्लेषण के अलावा गारंटीशुदा संविदात्मक लाभ (बीमा सम एश्योर्ड, IRDAI बोनस) का स्पष्ट पृथक्करण।'
+                : 'Full historical analysis plus contractual guaranteed benefits strictly separated from non-guaranteed bonuses.'}
             </p>
           </button>
         </div>

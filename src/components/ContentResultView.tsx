@@ -28,6 +28,7 @@ import { BrandedPosterStudio } from './BrandedPosterStudio';
 import { VideoStatusMaker } from './VideoStatusMaker';
 import { ThemePostersStudio } from './ThemePostersStudio';
 import { exportCardAsImage } from '../utils/cardToImage';
+import { downloadFile } from '../utils/downloadHelper';
 import { Download, Film, Layers } from 'lucide-react';
 
 interface ContentResultViewProps {
@@ -94,10 +95,8 @@ export const ContentResultView: React.FC<ContentResultViewProps> = ({
         format: 'status_9_16',
       });
       if (dataUrl) {
-        const link = document.createElement('a');
-        link.download = `${badge.toLowerCase().replace(/[^a-z0-9]/g, '-')}-status.png`;
-        link.href = dataUrl;
-        link.click();
+        const filename = `${badge.toLowerCase().replace(/[^a-z0-9]/g, '-')}-status.png`;
+        downloadFile(dataUrl, filename, 'image/png');
       }
     } catch (err) {
       console.error('Failed to export card image', err);

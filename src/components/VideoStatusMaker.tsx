@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useI18n } from '../context/I18nContext';
 import { useAdvisor } from '../context/AdvisorContext';
+import { downloadFile } from '../utils/downloadHelper';
 import {
   Video,
   Music,
@@ -661,10 +662,8 @@ export const VideoStatusMaker: React.FC<VideoStatusMakerProps> = ({
 
   const handleDownloadVideo = () => {
     if (!generatedVideoBlobUrl) return;
-    const link = document.createElement('a');
-    link.href = generatedVideoBlobUrl;
-    link.download = `financial-advisor-video-status-${Date.now()}.mp4`;
-    link.click();
+    const filename = `financial-advisor-video-status-${Date.now()}.mp4`;
+    downloadFile(generatedVideoBlobUrl, filename, 'video/mp4');
   };
 
   return (

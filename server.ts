@@ -23,8 +23,18 @@ function getGeminiClient(apiKey?: string) {
 }
 
 // Multi-model cascading executor for 100% reliable generation without 503 drops
+function cleanJsonText(raw: string): string {
+  let cleaned = (raw || '').trim();
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
+  }
+  return cleaned.trim();
+}
+
 async function generateContentWithFallback(ai: GoogleGenAI, prompt: string, config: any) {
-  const models = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
+  const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
   let lastError: any = null;
 
   for (const model of models) {
@@ -512,79 +522,125 @@ app.post('/api/generate-presentation', async (req, res) => {
     clientName,
     questionnaire,
     advisorProfile,
+    businessProfile,
+    historicalScenarioMode,
+    workflowType,
   } = req.body;
 
-  try {
-    const ai = getGeminiClient();
+  const apiKey = process.env.GEMINI_API_KEY;
+  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
 
-    const targetSlideCount = mode === 'quick' ? 4 : mode === 'detailed' ? 8 : 6;
+  if (!isKeyValid) {
+    return res.json({
+      success: false,
+      useLocalEngine: true,
+      message: 'GEMINI_API_KEY is not configured on the server. Falling back to local generation engine.'
+    });
+  }
+
+  try {
+    const ai = getGeminiClient(apiKey);
+
+    const targetSlideCount = mode === 'quick' ? 6 : mode === 'detailed' ? 10 : 8;
     const langLabel = language === 'gu' ? 'Gujarati (ગુજરાતી)' : language === 'hi' ? 'Hindi (हिन्दी)' : 'English';
 
-    const presentationTopic = topicPrompt || subjectTitle || subCategoryTitle || 'Comprehensive Financial Strategy';
+    // Sector, Company, Product details
+    const sectorName = businessProfile?.sectorName || businessProfile?.customSectorName || 'Financial Advisory';
+    const companyName = businessProfile?.companyName || '';
+    const productName = businessProfile?.productName || '';
+    const advisorRole = businessProfile?.advisorRole || 'Independent Financial Advisor';
+    const authId = businessProfile?.authorizationIdentifier || '';
+    const needsVerification = businessProfile?.needsVerification || false;
 
-    const prompt = `You are an elite Senior Certified Financial Planner (CFP) and financial advisory expert creating a client-ready, multi-slide advisory presentation for an independent financial advisor in India.
+    const presentationTopic = topicPrompt || (companyName && productName ? `${companyName} — ${productName}` : subjectTitle || subCategoryTitle || 'Comprehensive Financial Strategy');
+
+    const prompt = `You are an elite Senior Certified Financial Planner (CFP) and financial advisory expert creating a client-ready, single-product advisory presentation report for a financial advisor in India.
+${workflowType === 'client_report_pdf' ? 'REPORT FORMAT: Official Single-Product Financial Advisory Report intended for high-resolution client PDF distribution.' : 'REPORT FORMAT: Executive presentation slide deck for client meeting.'}
 
 LANGUAGE REQUIREMENT:
-Generate the entire presentation strictly in ${langLabel}. Ensure pristine, natural, culturally authentic financial vocabulary suitable for high-trust client discussions.
+Generate the entire presentation strictly in ${langLabel}. Ensure pristine, natural, culturally authentic professional vocabulary suitable for high-trust client discussions.
 
-1. ADVISOR'S PRESENTATION GOAL & TOPIC REQUEST:
-"${presentationTopic}"
-Mode: ${mode.toUpperCase()} (${targetSlideCount} slides)
-${clientName ? `Prepared Specifically For Client: "${clientName}"` : 'General Client Advisory Deck'}
+1. TARGET PRODUCT RECOMMENDATION (SINGLE PRODUCT FOCUS):
+- Business Sector: "${sectorName}"
+- Institution / Company: "${companyName || 'Reputed Financial Institution'}"
+- Product / Scheme Selected: "${productName || 'Tailored Financial Solution'}"
+${businessProfile?.productVariant ? `- Product Variant/Plan: "${businessProfile.productVariant}"` : ''}
+${needsVerification ? `- Status: [Requires Verification] — do not state unverified facts as final contract terms.` : ''}
+- Advisor's Distribution Role: "${advisorRole}" ${authId ? `(Identifier: ${authId})` : ''}
+- Advisor's Presentation Goal & Topic: "${presentationTopic}"
+- Presentation Mode: ${mode.toUpperCase()} (${targetSlideCount} slides)
+${clientName ? `- Prepared For Client: "${clientName}"` : '- General Client Discussion Proposal'}
 
-2. OPTIONAL CLIENT CONTEXT & QUESTIONNAIRE INSIGHTS (IF PROVIDED):
+2. CLIENT PROFILE & QUESTIONNAIRE CONTEXT (DO NOT DISPLAY ADVISOR PRIVATE NOTES ON SLIDES):
 ${questionnaire?.clientRelationship ? `- Relationship & History: ${questionnaire.clientRelationship}` : ''}
 ${questionnaire?.clientGoals ? `- Client's Known Goals & Needs: ${questionnaire.clientGoals}` : ''}
 ${questionnaire?.clientBudget ? `- Approximate Annual Income / Investment Budget: ${questionnaire.clientBudget} (${questionnaire.clientBudgetStatus === 'verified' ? 'VERIFIED by client directly' : 'ADVISOR ESTIMATE'})` : ''}
 ${questionnaire?.clientConcerns ? `- Objections / Expressed Concerns: ${questionnaire.clientConcerns}` : ''}
-${questionnaire?.hesitationReasons ? `- Stated Hesitations & Suspected True Reasons: ${questionnaire.hesitationReasons}` : ''}
+${questionnaire?.hesitationReasons ? `- Stated Hesitations & True Concerns: ${questionnaire.hesitationReasons}` : ''}
 ${questionnaire?.preferredStyle ? `- Client's Preferred Presentation Style: ${questionnaire.preferredStyle}` : ''}
 ${questionnaire?.emphasisPoints ? `- High Priority Points / Calculations to Emphasize: ${questionnaire.emphasisPoints}` : ''}
 ${questionnaire?.additionalNotes ? `- Advisor Private Strategy Notes: "${questionnaire.additionalNotes}"` : ''}
+${historicalScenarioMode && historicalScenarioMode !== 'standard' ? `
+3. HISTORICAL BEST-CASE / MAXIMUM POTENTIAL BENEFIT SCENARIO (MANDATORY REQUIREMENT):
+Mode: ${historicalScenarioMode === 'historical_and_contractual' ? 'Historical Best-Case PLUS Maximum Contractual Benefit Analysis' : 'Historical Best-Case Analysis'}
+- For Investments/SIPs: Incorporate verified historical benchmark data (Nifty 50 TRI / Nifty 500 TRI), explicitly specifying dates and duration (e.g. 15-year rolling SIP return of ~17.8% during 2003-2018 cycle). You MUST clearly separate historical actual past returns from hypothetical future illustrations (12% baseline). Include statutory disclosure: "Past performance does not guarantee future results."
+- For Life Insurance: Calculate and state contractual benefits strictly from official policy terms. Keep Guaranteed Sum Assured death benefit completely distinct from non-guaranteed bonuses (IRDAI 4% & 8% illustrations). NEVER describe life insurance cover as investment profit.
+- For Loans / Deposits: Show guaranteed contractual rates, interest savings, or maturity values.
+` : ''}
 
-CRITICAL RULES & SEBI / IRDAI COMPLIANCE:
-1. STRICT CLIENT PRIVACY: NEVER render raw questionnaire questions, advisor secret notes, or "Suspected reasons" text on the client slides. Use them ONLY to smartly tailor the tone, counter objections gently, and frame solutions convincingly.
-2. NO ILLEGAL GUARANTEES: Never state guaranteed returns on mutual funds, equities, or market-linked plans. Transparently state assumptions (e.g., "Assumed 12% CAGR equity SIP illustration for 15 years", "Assumed 7% inflation rate").
-3. COLORFUL YET CRISP IN BLACK-AND-WHITE PRINT: Ensure all slide metrics, tables, and charts are high contrast, readable, and structured.
-4. UNIVERSAL TOPIC INTELLIGENCE: Accurately cover the requested topic — whether SIP, Mutual Funds, Retirement, Term Life, Health Mediclaim, Car/Vehicle Zero-Depreciation insurance, Tax Planning (Old vs New Regime), Home Loans, or Commercial Insurance. Provide accurate Indian market math, terms, and regulatory realities.
-5. ADVISOR BRANDING ON FINAL SLIDE: Integrate the Advisor's details: ${advisorProfile?.advisorName || 'Financial Advisor'}, ${advisorProfile?.designation || 'CFP'}, Phone: ${advisorProfile?.phoneNumber || ''}, WhatsApp: ${advisorProfile?.whatsappNumber || ''}, Email: ${advisorProfile?.email || ''}, License/ARN: ${advisorProfile?.professionalDetails || ''}, and compliance disclaimer: "${advisorProfile?.defaultDisclaimer || 'Mutual fund investments are subject to market risks. Read all scheme related documents carefully.'}".
+CRITICAL REPORT DESIGN RULES (INSPIRED BY GOLD-STANDARD ADVISOR PDF SAMPLES):
+1. THE SELECTED PRODUCT MUST REMAIN THE CENTRAL SUBJECT of the report. Do NOT produce a generic financial literacy essay or product comparison brochure. It must read like an advisor's customized advisory report prepared after understanding the client's needs.
+2. SECTOR-SPECIFIC REPORT LOGIC:
+   • MUTUAL FUNDS / SIP: Use exact scheme (${productName}), plan, regular growth option. Explain investment mandate, riskometer (Very High), horizon, SIP amount, hypothetical future value scenarios (6%, 10%, 12% mathematical sensitivities), historical performance context with explicit disclosure that past returns do not guarantee future returns, costs (TER & exit load), taxation, and what the fund's published history shows vs what it does NOT show.
+   • LIFE INSURANCE: Analyze protection need, income support reserve, liabilities (home loan), children's future education, existing cover, net protection gap, why term insurance fits the gap, guaranteed vs non-guaranteed benefits, riders, medical disclosures, and claims servicing checklist.
+   • HEALTH INSURANCE: Analyze hospitalization impact on savings, base sum insured, room eligibility, waiting periods (initial, pre-existing disease), booster/restoration, network cashless hospitals, family cash-flow context, claim scenarios, and disclosure principles.
+   • LOANS / FINANCE: Analyze loan purpose, tenure, affordability, illustrative EMI scenarios across interest rates, required documentation, and lender eligibility checks.
+   • OTHER SECTORS: Intelligently adapt to the actual financial product structure (costs, liquidity, risks, regulatory checks).
+3. STRICT COMPLIANCE & LEGAL SAFETY:
+   • NEVER promise guaranteed returns on mutual funds, equities, or market-linked plans.
+   • NEVER guarantee loan approval, claim settlement, or policy issuance.
+   • DO NOT display advisor commissions in client-facing presentations.
+   • Transparently state assumptions and label all projections as illustrative scenarios.
+4. ADVISOR BRANDING ON FINAL SLIDE:
+   Advisor: ${advisorProfile?.advisorName || 'Financial Advisor'}, ${advisorProfile?.designation || advisorRole}, Phone: ${advisorProfile?.phoneNumber || ''}, WhatsApp: ${advisorProfile?.whatsappNumber || ''}, Email: ${advisorProfile?.email || ''}, License/Identifier: ${authId || advisorProfile?.professionalDetails || ''}, Compliance Disclaimer: "${advisorProfile?.defaultDisclaimer || 'Investments are subject to market risks. Read all scheme and policy documents carefully.'}".
 
 SLIDE STRUCTURE BLUEPRINT (${targetSlideCount} slides):
-- Slide 1 (Cover): Inspiring title matching the advisor's request, client objective, and executive summary punchline.
-- Slide 2 (The Core Reality & Challenge): Why this matters today, impact of inflation/inaction/risks, 3 crisp bullet points, and 2-3 key metrics.
-- Slide 3 (Core Solution / Strategy): Framework breakdown with visual chartData (type: 'bar', 'donut', 'line', or 'milestones' with labels, values, unit, and explanation).
-- Slide 4 (Realistic Mathematical Projections): Clear, accurate calculations with transparent assumptions, comparisons or compounding numbers.
-${mode === 'detailed' ? `- Slide 5 (Option Comparison Matrix): A structured comparisonTable with headers [Parameter, Option A, Option B] and 3-4 rows showing pros/cons.
-- Slide 6 (Risks, Limitations & Prudent Mitigations): Real-world limitations, liquidity, market cycles, and how the advisor mitigates them.
-- Slide 7 (Action Roadmap / Step-by-Step): Concrete milestone roadmap (e.g. Month 1 setup, Year 1 review, Milestone checks).` : ''}
-${mode === 'personalized' ? `- Slide 5 (Direct Objection Handlers & Personalized FAQ): Respectfully address the client's stated concerns with facts and reassuring perspective.` : ''}
-- Slide ${targetSlideCount} (Clear Next Steps & Advisor Contact): Step-by-step action plan, compelling CTA, full advisor credentials, and compliance disclaimer.
+- Slide 1: Professional Cover Page — Exact Product Name ("${productName || 'Product Recommendation'}"), Institution ("${companyName}"), Client Name ("${clientName || 'Client Family'}"), Advisor Role & clear subtitle.
+- Slide 2: Client Profile & The Core Need Discussed — Household income/budget context, financial priority, risk capacity, and why this discussion matters.
+- Slide 3: Why This Specific Product is Being Considered — Mandate, strategy, core features, official factsheet/policy parameters.
+- Slide 4: Proposal & Financial Scenarios — Tangible numbers (SIP / Premium / EMI / Sum Insured), time horizon, and realistic future value or cost scenarios.
+- Slide 5: Visual Breakdown & Sensitivity Scenarios — Include structured chartData (type: 'bar', 'donut', 'line', or 'milestones') illustrating growth, asset allocation, or protection coverage.
+- Slide 6: Critical Details & Product Mechanics — For MFs: TER, exit load, historical SIP facts vs limitations; For Insurance: Waiting periods, room rent, cashless network, Booster+; For Loans: Interest rates, processing fees, repayment schedule.
+- Slide 7: Why This May Not Be Suitable / Risk Factors — Honest risk disclosures, underperformance, behavioural panic risk, exclusions, and suitability guardrails.
+${targetSlideCount >= 8 ? `- Slide 8: Implementation Checklist & Review Schedule — Action steps before transaction (KYC, bank mandate, policy schedule review, annual review cadence).` : ''}
+${targetSlideCount >= 10 ? `- Slide 9: Common Client Questions & Objective Answers — Direct answers addressing the client's stated concerns with facts and reassuring perspective.` : ''}
+- Slide ${targetSlideCount}: Advisor's Personalized Recommendation, Disclosures & Contact CTA — Final advisor closing note, full credentials (${advisorRole}), phone/WhatsApp, and statutory compliance disclaimer.
 
 You MUST respond with valid JSON matching this exact structure:
 {
-  "title": "Presentation Main Title",
+  "title": "${productName ? `${productName} — Client Recommendation` : 'Client Advisory Presentation'}",
   "slides": [
     {
       "slideNumber": 1,
       "slideType": "cover",
-      "badge": "Short Badge (e.g. Strategic Plan)",
-      "title": "Slide Title",
-      "subtitle": "Clear Subtitle",
-      "keyTakeaway": "1-sentence executive punchline",
+      "badge": "Product Recommendation",
+      "title": "${productName || 'Financial Solution'}",
+      "subtitle": "${companyName ? `Prepared with ${companyName}` : 'Personalized Advisory Blueprint'}",
+      "keyTakeaway": "Executive summary of the recommendation",
       "bulletPoints": [
-        "Crisp point 1",
-        "Crisp point 2",
-        "Crisp point 3"
+        "Personalized client recommendation prepared for family discussion",
+        "Clear goal alignment and objective risk suitability",
+        "Transparent fee, performance, and regulatory disclosures"
       ],
       "metrics": [
-        { "label": "Target Horizon", "value": "10-15 Yrs", "helper": "Compound cycle" },
-        { "label": "Expected Benchmark", "value": "12% CAGR", "helper": "Illustrative basis" }
+        { "label": "Product", "value": "${productName ? productName.slice(0, 18) : 'Strategic'}", "helper": "${companyName || 'Verified'}" },
+        { "label": "Advisory Status", "value": "${needsVerification ? 'Review Pending' : 'Suitability Match'}", "helper": "Official Terms" }
       ],
-      "assumptions": ["Assumed 12% CAGR equity growth for illustrative purposes"]
+      "assumptions": ["Illustrative client report. Terms subject to official current documents."]
     }
   ]
 }
-Each slide should have appropriate properties (metrics, chartData, comparisonTable, risksAndLimitations, assumptions, or callToAction).`;
+Ensure each slide has valid rich elements (metrics, chartData, comparisonTable, risksAndLimitations, assumptions, or callToAction).`;
 
     const responseText = await generateContentWithFallback(ai, prompt, {
       responseMimeType: 'application/json',
@@ -592,7 +648,71 @@ Each slide should have appropriate properties (metrics, chartData, comparisonTab
       maxOutputTokens: 8192,
     });
 
-    const parsedData = JSON.parse(responseText);
+    const cleanedText = cleanJsonText(responseText);
+    const parsedData = JSON.parse(cleanedText);
+
+    // Normalize slides for rock-solid frontend consumption
+    if (parsedData && Array.isArray(parsedData.slides)) {
+      parsedData.slides = parsedData.slides.map((slide: any, idx: number) => {
+        const slideNumber = slide.slideNumber || idx + 1;
+        const badge = slide.badge || (
+          slideNumber === 1
+            ? (language === 'gu' ? 'મુખ્ય આયોજન' : language === 'hi' ? 'मुख्य योजना' : 'Overview')
+            : (language === 'gu' ? `સ્લાઇડ #${slideNumber}` : language === 'hi' ? `स्लाइड #${slideNumber}` : `Slide #${slideNumber}`)
+        );
+
+        let comparisonTable = slide.comparisonTable;
+        if (comparisonTable && Array.isArray(comparisonTable.rows)) {
+          comparisonTable = {
+            headers: Array.isArray(comparisonTable.headers) ? comparisonTable.headers : ['Parameter', 'Recommendation', 'Alternative'],
+            rows: comparisonTable.rows.map((row: any) => {
+              if (Array.isArray(row)) {
+                return {
+                  parameter: String(row[0] || ''),
+                  optionA: String(row[1] || ''),
+                  optionB: String(row[2] || ''),
+                };
+              }
+              return row;
+            }),
+          };
+        }
+
+        let callToAction = slide.callToAction;
+        if (callToAction && typeof callToAction === 'object') {
+          callToAction =
+            callToAction.text ||
+            callToAction.message ||
+            callToAction.cta ||
+            (callToAction.phone || callToAction.whatsapp
+              ? `Consultation: ${callToAction.advisorName || 'Financial Advisor'} (Tel: ${callToAction.phone || callToAction.whatsapp})`
+              : 'Schedule your personalized 1-on-1 portfolio review today.');
+        }
+
+        const bulletPoints = Array.isArray(slide.bulletPoints)
+          ? slide.bulletPoints.map((bp: any) =>
+              typeof bp === 'string' ? bp : bp?.text || bp?.point || bp?.description || String(bp || '')
+            )
+          : [];
+
+        const keyTakeaway =
+          typeof slide.keyTakeaway === 'string'
+            ? slide.keyTakeaway
+            : slide.keyTakeaway?.text || slide.keyTakeaway?.point || String(slide.keyTakeaway || '');
+
+        return {
+          ...slide,
+          slideNumber,
+          badge: typeof badge === 'string' ? badge : String(badge || ''),
+          title: typeof slide.title === 'string' ? slide.title : String(slide.title?.text || slide.title || `Slide ${slideNumber}`),
+          subtitle: typeof slide.subtitle === 'string' ? slide.subtitle : String(slide.subtitle?.text || slide.subtitle || ''),
+          keyTakeaway,
+          bulletPoints,
+          callToAction: callToAction ? String(callToAction) : undefined,
+          comparisonTable,
+        };
+      });
+    }
 
     return res.json({
       success: true,
@@ -622,8 +742,19 @@ app.post('/api/regenerate-slide', async (req, res) => {
     advisorProfile,
   } = req.body;
 
+  const apiKey = process.env.GEMINI_API_KEY;
+  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+
+  if (!isKeyValid) {
+    return res.json({
+      success: false,
+      useLocalEngine: true,
+      error: 'GEMINI_API_KEY is not configured on the server',
+    });
+  }
+
   try {
-    const ai = getGeminiClient();
+    const ai = getGeminiClient(apiKey);
     const langLabel = language === 'gu' ? 'Gujarati (ગુજરાતી)' : language === 'hi' ? 'Hindi (हिन्दी)' : 'English';
 
     const prompt = `You are a Senior Certified Financial Planner (CFP).
@@ -669,12 +800,13 @@ COMPLIANCE RULES:
       maxOutputTokens: 3000,
     });
 
-    const parsedSlide = JSON.parse(responseText);
+    const cleanedText = cleanJsonText(responseText);
+    const parsedSlide = JSON.parse(cleanedText);
 
     return res.json({
       success: true,
       source: 'ai_api',
-      slide: parsedSlide,
+      data: parsedSlide,
     });
   } catch (error: any) {
     console.error('Slide Regeneration API Error:', error);

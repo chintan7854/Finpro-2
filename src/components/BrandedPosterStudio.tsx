@@ -4,6 +4,7 @@ import { useAdvisor } from '../context/AdvisorContext';
 import { FinancialSubjectId, GeneratedContent, LanguageCode } from '../types';
 import { renderPosterToCanvas, PosterConfig } from '../utils/posterRenderer';
 import { generateAdvisorContent } from '../services/contentGenerator';
+import { downloadCanvasAsPng } from '../utils/downloadHelper';
 import { MAIN_FINANCIAL_SUBJECTS } from '../constants/subjects';
 import { SUBJECT_ADVISOR_SUGGESTIONS } from '../constants/advisorSubjectSuggestions';
 import { VideoStatusMaker } from './VideoStatusMaker';
@@ -236,16 +237,15 @@ export const BrandedPosterStudio: React.FC<BrandedPosterStudioProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const dataUrl = canvas.toDataURL('image/png', 1.0);
-    const link = document.createElement('a');
     const safeSubject = activeSubjectTitle.toLowerCase().replace(/[^a-z0-9]/g, '-');
     const fileSuffix = format === 'status_9_16' ? 'whatsapp-status' : 'social-post';
-    link.download = `${safeSubject}-${fileSuffix}-${Date.now()}.png`;
-    link.href = dataUrl;
-    link.click();
+    const filename = `${safeSubject}-${fileSuffix}-${Date.now()}.png`;
 
-    setDownloadSuccess(true);
-    setTimeout(() => setDownloadSuccess(false), 3000);
+    const success = downloadCanvasAsPng(canvas, filename);
+    if (success) {
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    }
   };
 
   // Copy Image to Clipboard

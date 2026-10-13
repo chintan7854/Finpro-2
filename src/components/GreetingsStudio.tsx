@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useI18n } from '../context/I18nContext';
 import { useAdvisor } from '../context/AdvisorContext';
+import { downloadCanvasAsPng } from '../utils/downloadHelper';
 import {
   Cake,
   Heart,
@@ -435,20 +436,11 @@ export const GreetingsStudio: React.FC<GreetingsStudioProps> = ({
       const sanitizedName = (recipientName || 'Valued_Client').replace(/\s+/g, '_');
       const filename = `Greeting_${activeTab.toUpperCase()}_${sanitizedName}_${resolution.toUpperCase()}.png`;
 
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.download = filename;
-        link.href = url;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
+      const success = downloadCanvasAsPng(canvas, filename);
+      if (success) {
         setActionNotice(`Downloaded ${resolution === '4k' ? 'Supreme 4K' : 'Ultra HD'} Poster successfully!`);
         setTimeout(() => setActionNotice(null), 3500);
-      }, 'image/png');
+      }
     } catch (err) {
       console.error('Download error:', err);
     }
