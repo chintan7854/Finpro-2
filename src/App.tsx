@@ -75,95 +75,104 @@ function MainApp() {
       <div className="flex-1 flex max-w-7xl w-full mx-auto">
         <Sidebar currentView={currentView} onNavigate={handleNavigate} />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0">
-          {currentView === 'dashboard' && (
-            <DashboardView
-              onNavigate={handleNavigate}
-              onSelectTopicForGeneration={handleSelectTopicForGeneration}
-              onViewContentDetail={handleViewContentDetail}
-            />
-          )}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 flex flex-col justify-between">
+          <div className="flex-1">
+            {currentView === 'dashboard' && (
+              <DashboardView
+                onNavigate={handleNavigate}
+                onSelectTopicForGeneration={handleSelectTopicForGeneration}
+                onViewContentDetail={handleViewContentDetail}
+              />
+            )}
 
-          {currentView === 'create' && (
-            <CreateContentView
-              initialSubjectId={preselectedSubject}
-              onContentGenerated={handleContentGenerated}
-            />
-          )}
+            {currentView === 'create' && (
+              <CreateContentView
+                initialSubjectId={preselectedSubject}
+                onContentGenerated={handleContentGenerated}
+              />
+            )}
 
-          {currentView === 'result' && activeResultContent && (
-            <ContentResultView
-              content={activeResultContent}
-              onBack={() => setCurrentView('dashboard')}
-              onCreateAnother={() => {
-                setPreselectedSubject(undefined);
-                setCurrentView('create');
-              }}
-            />
-          )}
+            {currentView === 'result' && activeResultContent && (
+              <ContentResultView
+                content={activeResultContent}
+                onBack={() => setCurrentView('dashboard')}
+                onCreateAnother={() => {
+                  setPreselectedSubject(undefined);
+                  setCurrentView('create');
+                }}
+              />
+            )}
 
-          {currentView === 'profile' && <ProfileView />}
+            {currentView === 'profile' && <ProfileView />}
 
-          {currentView === 'my-content' && (
-            <MyContentView
-              onSelectContent={handleViewContentDetail}
-              onCreateNew={() => setCurrentView('create')}
-            />
-          )}
+            {currentView === 'my-content' && (
+              <MyContentView
+                onSelectContent={handleViewContentDetail}
+                onCreateNew={() => setCurrentView('create')}
+              />
+            )}
 
-          {currentView === 'calculators' && (
-            <CalculatorsView onNavigateToSimulators={() => handleNavigate('simulators')} />
-          )}
+            {currentView === 'calculators' && (
+              <CalculatorsView onNavigateToSimulators={() => handleNavigate('simulators')} />
+            )}
 
-          {currentView === 'simulators' && <MindsetSimulatorsView />}
+            {currentView === 'simulators' && <MindsetSimulatorsView />}
 
-          {currentView === 'finance-poll' && <FinancePollView />}
+            {currentView === 'finance-poll' && <FinancePollView />}
 
-          {currentView === 'finance-quiz' && <FinanceQuizView />}
+            {currentView === 'finance-quiz' && <FinanceQuizView />}
 
-          {currentView === 'presentation-studio' && <PresentationStudioView />}
+            {currentView === 'presentation-studio' && <PresentationStudioView />}
 
-          {currentView === 'story-studio' && <StoryStudioView />}
+            {currentView === 'story-studio' && <StoryStudioView />}
 
-          {currentView === 'theme-studio' && (
-            <ThemePostersStudio
-              initialSubjectId={preselectedSubject}
-              onNavigateToStandardStudio={() => setCurrentView('status-studio')}
-            />
-          )}
+            {currentView === 'theme-studio' && (
+              <ThemePostersStudio
+                initialSubjectId={preselectedSubject}
+                onNavigateToStandardStudio={() => setCurrentView('status-studio')}
+              />
+            )}
 
-          {currentView === 'status-studio' && (
-            <BrandedPosterStudio
-              onNavigateToThemeStudio={() => setCurrentView('theme-studio')}
-            />
-          )}
+            {currentView === 'status-studio' && (
+              <BrandedPosterStudio
+                onNavigateToThemeStudio={() => setCurrentView('theme-studio')}
+              />
+            )}
 
-          {currentView === 'lead-generation' && (
-            <LeadGenerationView
-              onNavigateToGreetings={handleNavigateToGreetings}
-              onNavigate={handleNavigate}
-            />
-          )}
+            {currentView === 'lead-generation' && (
+              <LeadGenerationView
+                onNavigateToGreetings={handleNavigateToGreetings}
+                onNavigate={handleNavigate}
+              />
+            )}
 
-          {currentView === 'client-crm' && (
-            <ClientCrmView
-              onNavigateToGreetings={handleNavigateToGreetings}
-              onNavigate={handleNavigate}
-            />
-          )}
+            {currentView === 'client-crm' && (
+              <ClientCrmView
+                onNavigateToGreetings={handleNavigateToGreetings}
+                onNavigate={handleNavigate}
+              />
+            )}
 
-          {currentView === 'greetings-studio' && (
-            <GreetingsStudio
-              initialTab={greetingsStudioConfig?.tab}
-              initialRecipientName={greetingsStudioConfig?.recipientName}
-            />
-          )}
+            {currentView === 'greetings-studio' && (
+              <GreetingsStudio
+                initialTab={greetingsStudioConfig?.tab}
+                initialRecipientName={greetingsStudioConfig?.recipientName}
+              />
+            )}
 
-          {currentView === 'client-tools' && <ClientToolsView />}
+            {currentView === 'client-tools' && <ClientToolsView />}
 
-          {currentView === 'client-qa' && <ClientQaView />}
+            {currentView === 'client-qa' && <ClientQaView />}
 
-          {currentView === 'settings' && <SettingsView />}
+            {currentView === 'settings' && <SettingsView />}
+          </div>
+
+          {/* Persistent Subtle Global Footer Credit */}
+          <footer className="mt-8 pt-4 pb-20 md:pb-2 text-center select-none" aria-label="Site Credits">
+            <p className="text-[11px] text-gray-400 opacity-60 font-normal tracking-wide">
+              Created by: Chintan Raval
+            </p>
+          </footer>
         </main>
       </div>
 
