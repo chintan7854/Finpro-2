@@ -23,11 +23,23 @@ import {
   ChevronDown,
   ChevronUp,
   ShieldCheck,
-  Briefcase,
   Calendar,
-  Globe,
   Sun,
   Camera,
+  Layers,
+  Palette,
+  Maximize2,
+  Type,
+  LayoutTemplate,
+  CheckCircle2,
+  Github,
+  ExternalLink,
+  ZoomIn,
+  ZoomOut,
+  Lock,
+  Move,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { LanguageCode } from '../types';
 import {
@@ -35,7 +47,6 @@ import {
   ANNIVERSARY_BACKGROUNDS,
   FESTIVALS_LIST,
   SPECIAL_DAYS_LIST,
-  EVENT_BACKGROUND_MAPPINGS,
   BackgroundPreset,
   FestivalItem,
   SpecialDayItem,
@@ -44,7 +55,24 @@ import {
   renderGreetingCard,
   GreetingCanvasOptions,
   AdvisorBrandingData,
+  GreetingAspectRatio,
+  FooterStyle,
+  PhotoShape,
+  TypographyTheme,
+  PhotoAnchor,
+  TextAnchor,
+  TextBackplate,
+  getCanvasDimensions,
 } from '../utils/greetingCanvasRenderer';
+import {
+  getStoredBackgrounds,
+  syncGitHubRepository,
+  getSavedGitHubConfig,
+  saveGitHubConfig,
+  DEFAULT_GITHUB_CONFIG,
+  CategorizedBackgrounds,
+  countTotalImages,
+} from '../services/githubBackgroundService';
 
 interface GreetingsStudioProps {
   initialTab?: 'birthday' | 'anniversary' | 'festivals' | 'days';
@@ -52,6 +80,7 @@ interface GreetingsStudioProps {
 }
 
 type GreetingTab = 'birthday' | 'anniversary' | 'festivals' | 'days';
+type StudioControlTab = 'occasion' | 'library' | 'photo' | 'branding';
 
 export const GreetingsStudio: React.FC<GreetingsStudioProps> = ({
   initialTab = 'birthday',
@@ -60,57 +89,96 @@ export const GreetingsStudio: React.FC<GreetingsStudioProps> = ({
   const { language } = useI18n();
   const { profile } = useAdvisor();
 
-  // Navigation & Active Occasion
+  // Primary Occasion Category
   const [activeTab, setActiveTab] = useState<GreetingTab>(initialTab);
+  const [controlTab, setControlTab] = useState<StudioControlTab>('occasion');
   const [recipientName, setRecipientName] = useState<string>(initialRecipientName || 'Rajeshbhai Patel');
-  const [greetingLang, setGreetingLang] = useState<LanguageCode>('en'); // Default English strictly as required
+  const [greetingLang, setGreetingLang] = useState<LanguageCode>('en');
 
-  // Selections for each category
-  const [selectedBdayBg, setSelectedBdayBg] = useState<BackgroundPreset>(BIRTHDAY_BACKGROUNDS[0]);
-  const [selectedAnniBg, setSelectedAnniBg] = useState<BackgroundPreset>(ANNIVERSARY_BACKGROUNDS[0]);
+  // GitHub Background Library State
+  const [githubCatalog, setGithubCatalog] = useState<CategorizedBackgrounds>(getStoredBackgrounds());
+  const [isSyncingGithub, setIsSyncingGithub] = useState<boolean>(false);
+  const [githubSyncNotice, setGithubSyncNotice] = useState<string | null>(null);
+  const [showGithubSettings, setShowGithubSettings] = useState<boolean>(false);
+  const [githubConfig, setGithubConfig] = useState(getSavedGitHubConfig());
+
+  // Background Selection
+  const [selectedBdayBg, setSelectedBdayBg] = useState<BackgroundPreset>(
+    () => githubCatalog.birthday[0] || BIRTHDAY_BACKGROUNDS[0]
+  );
+  const [selectedAnniBg, setSelectedAnniBg] = useState<BackgroundPreset>(
+    () => githubCatalog.anniversary[0] || ANNIVERSARY_BACKGROUNDS[0]
+  );
+  const [selectedDiwaliBg, setSelectedDiwaliBg] = useState<BackgroundPreset>(
+    () => githubCatalog.diwali[0] || FESTIVALS_LIST[0]?.bgPresets[0]
+  );
   const [selectedFestival, setSelectedFestival] = useState<FestivalItem>(FESTIVALS_LIST[0]);
   const [selectedFestivalBg, setSelectedFestivalBg] = useState<BackgroundPreset>(FESTIVALS_LIST[0].bgPresets[0]);
   const [selectedSpecialDay, setSelectedSpecialDay] = useState<SpecialDayItem>(SPECIAL_DAYS_LIST[0]);
   const [selectedSpecialDayBg, setSelectedSpecialDayBg] = useState<BackgroundPreset>(SPECIAL_DAYS_LIST[0].bgPresets[0]);
 
-  // Search queries for large lists
+  // Custom Background Upload
+  const [customBgPreset, setCustomBgPreset] = useState<BackgroundPreset | null>(null);
+  const [isUsingCustomBg, setIsUsingCustomBg] = useState<boolean>(false);
+  const [customImageUrlInput, setCustomImageUrlInput] = useState<string>('');
+
+  // Search Filters
   const [festivalSearch, setFestivalSearch] = useState<string>('');
   const [specialDaySearch, setSpecialDaySearch] = useState<string>('');
+  const [libraryCategory, setLibraryCategory] = useState<'all' | 'birthday' | 'anniversary' | 'diwali' | 'festivals' | 'specialDays' | 'custom'>('all');
 
-  // Custom Background from Advisor's Device
-  const [customBgUrl, setCustomBgUrl] = useState<string | null>(null);
-  const [isUsingCustomBg, setIsUsingCustomBg] = useState<boolean>(false);
-  const [bgDarkness, setBgDarkness] = useState<number>(0.42);
+  // Canvas Workspace Architecture (Default: Portrait 2:3, 1024×1536 px)
+  const [aspectRatio, setAspectRatio] = useState<GreetingAspectRatio>('portrait_2_3');
+  const [resolution, setResolution] = useState<'hd' | '4k'>('hd');
+  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
 
-  // Customer Photo Upload & Frame
+  // Layer 1: Client Photo & Frame Settings
   const [hasCustomerPhoto, setHasCustomerPhoto] = useState<boolean>(false);
   const [customerPhotoUrl, setCustomerPhotoUrl] = useState<string | null>(null);
-  const [customerPhotoShape, setCustomerPhotoShape] = useState<'circle' | 'square_rounded'>('circle');
+  const [customerPhotoShape, setCustomerPhotoShape] = useState<PhotoShape>('circle');
+  const [customerPhotoScale, setCustomerPhotoScale] = useState<number>(1.0);
+  const [customerPhotoAnchor, setCustomerPhotoAnchor] = useState<PhotoAnchor>('top_center');
+  const [photoOffsetX, setPhotoOffsetX] = useState<number>(0);
+  const [photoOffsetY, setPhotoOffsetY] = useState<number>(0);
 
-  // Text Customization
+  // Layer 2: Typography, Occasion Badge & Wishes
+  const [showOccasionIcon, setShowOccasionIcon] = useState<boolean>(true);
+  const [typographyTheme, setTypographyTheme] = useState<TypographyTheme>('gold');
+  const [titleScale, setTitleScale] = useState<number>(1.0);
+  const [messageScale, setMessageScale] = useState<number>(1.0);
+  const [textAnchor, setTextAnchor] = useState<TextAnchor>('middle');
+  const [textAlign, setTextAlign] = useState<'center' | 'left' | 'right'>('center');
+  const [textBackplate, setTextBackplate] = useState<TextBackplate>('none');
+  const [textOffsetY, setTextOffsetY] = useState<number>(0);
   const [customWishText, setCustomWishText] = useState<string>('');
   const [customSalutation, setCustomSalutation] = useState<string>('');
 
-  // Advisor Custom Branding Drawer
-  const [showAdvisorEditor, setShowAdvisorEditor] = useState<boolean>(false);
+  // Layer 3: Advisor Branding & Footer Architecture
+  const [showAdvisorCard, setShowAdvisorCard] = useState<boolean>(true);
+  const [footerStyle, setFooterStyle] = useState<FooterStyle>('frosted_glass');
   const [advisorName, setAdvisorName] = useState<string>(profile.advisorName || 'Chintan Raval');
-  const [advisorDesignation, setAdvisorDesignation] = useState<string>(profile.designation || 'Financial Advisor & Wealth Architect');
+  const [advisorDesignation, setAdvisorDesignation] = useState<string>(
+    profile.designation || 'AMFI Registered MFD & Wealth Architect'
+  );
   const [firmName, setFirmName] = useState<string>('Raval Finserv Wealth');
   const [phoneNumber, setPhoneNumber] = useState<string>(profile.phoneNumber || '+91 98765 43210');
   const [arnNumber, setArnNumber] = useState<string>(profile.professionalDetails || 'ARN-123456');
   const [website, setWebsite] = useState<string>(profile.website || 'www.ravalfinserv.com');
+  const [advisorAvatarUrl, setAdvisorAvatarUrl] = useState<string | null>(null);
 
-  // Resolution & Canvas state
-  const [resolution, setResolution] = useState<'hd' | '4k'>('hd'); // hd: 1080x1080, 4k: 2160x2160
+  // Status & Feedback
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isRendering, setIsRendering] = useState<boolean>(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
+  // Canvas & Image Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
   const customerPhotoRef = useRef<HTMLImageElement | null>(null);
+  const advisorPhotoRef = useRef<HTMLImageElement | null>(null);
   const fileInputBgRef = useRef<HTMLInputElement>(null);
   const fileInputCustomerRef = useRef<HTMLInputElement>(null);
+  const fileInputAdvisorRef = useRef<HTMLInputElement>(null);
 
   // Sync initial props
   useEffect(() => {
@@ -118,170 +186,231 @@ export const GreetingsStudio: React.FC<GreetingsStudioProps> = ({
     if (initialRecipientName) setRecipientName(initialRecipientName);
   }, [initialTab, initialRecipientName]);
 
-  // Update profile fallback if profile changes
+  // Sync advisor profile
   useEffect(() => {
     if (profile.advisorName && !advisorName) setAdvisorName(profile.advisorName);
-    if (profile.designation && !advisorDesignation) setAdvisorDesignation(profile.designation);
     if (profile.phoneNumber && !phoneNumber) setPhoneNumber(profile.phoneNumber);
+    if (profile.designation && !advisorDesignation) setAdvisorDesignation(profile.designation);
+    if (profile.professionalDetails && !arnNumber) setArnNumber(profile.professionalDetails);
+    if (profile.website && !website) setWebsite(profile.website);
   }, [profile]);
 
-  // Filtered lists
-  const filteredFestivals = useMemo(() => {
-    const q = festivalSearch.toLowerCase().trim();
-    if (!q) return FESTIVALS_LIST;
-    return FESTIVALS_LIST.filter(
-      (f) =>
-        f.name.toLowerCase().includes(q) ||
-        f.nameGu.toLowerCase().includes(q) ||
-        f.nameHi.toLowerCase().includes(q) ||
-        f.month.toLowerCase().includes(q)
-    );
-  }, [festivalSearch]);
-
-  const filteredSpecialDays = useMemo(() => {
-    const q = specialDaySearch.toLowerCase().trim();
-    if (!q) return SPECIAL_DAYS_LIST;
-    return SPECIAL_DAYS_LIST.filter(
-      (d) =>
-        d.name.toLowerCase().includes(q) ||
-        d.nameGu.toLowerCase().includes(q) ||
-        d.nameHi.toLowerCase().includes(q) ||
-        d.category.toLowerCase().includes(q) ||
-        d.dateStr.toLowerCase().includes(q)
-    );
-  }, [specialDaySearch]);
-
-  // Active event matching presets list (2-3 tailored themes per event)
-  const matchingPresets: BackgroundPreset[] = useMemo(() => {
-    if (activeTab === 'birthday') return BIRTHDAY_BACKGROUNDS;
-    if (activeTab === 'anniversary') return ANNIVERSARY_BACKGROUNDS;
-    if (activeTab === 'festivals') return selectedFestival?.bgPresets || [];
-    return selectedSpecialDay?.bgPresets || [];
-  }, [activeTab, selectedFestival, selectedSpecialDay]);
-
-  const currentEventTitle = useMemo(() => {
-    if (activeTab === 'birthday') return 'Birthday';
-    if (activeTab === 'anniversary') return 'Anniversary';
-    if (activeTab === 'festivals') return selectedFestival.name;
-    return selectedSpecialDay.name;
-  }, [activeTab, selectedFestival, selectedSpecialDay]);
-
-  const currentEventKeywords = useMemo(() => {
-    const key =
-      activeTab === 'birthday'
-        ? 'birthday'
-        : activeTab === 'anniversary'
-        ? 'anniversary'
-        : activeTab === 'festivals'
-        ? selectedFestival.id
-        : selectedSpecialDay.id;
-    return EVENT_BACKGROUND_MAPPINGS[key]?.keywords || [];
-  }, [activeTab, selectedFestival, selectedSpecialDay]);
-
-  // Active Background Preset
-  const currentBgPreset: BackgroundPreset = useMemo(() => {
-    if (activeTab === 'birthday') return selectedBdayBg;
-    if (activeTab === 'anniversary') return selectedAnniBg;
-    if (activeTab === 'festivals') {
-      const match = selectedFestival.bgPresets.find((p) => p.id === selectedFestivalBg.id);
-      return match || selectedFestival.bgPresets[0];
+  // Handle GitHub sync on mount or manual trigger
+  const handleSyncGithub = async (config = githubConfig) => {
+    setIsSyncingGithub(true);
+    setGithubSyncNotice('Connecting to GitHub repository...');
+    try {
+      const res = await syncGitHubRepository(config);
+      if (res.success) {
+        setGithubCatalog(res.backgrounds);
+        setGithubSyncNotice(`Successfully loaded ${res.totalImages} images from ${config.owner}/${config.repo}!`);
+        setTimeout(() => setGithubSyncNotice(null), 5000);
+      } else {
+        setGithubSyncNotice(res.error || 'GitHub sync fallback active.');
+        setTimeout(() => setGithubSyncNotice(null), 6000);
+      }
+    } catch {
+      setGithubSyncNotice('Sync completed with local cached library.');
+      setTimeout(() => setGithubSyncNotice(null), 4000);
+    } finally {
+      setIsSyncingGithub(false);
     }
-    const match = selectedSpecialDay.bgPresets.find((p) => p.id === selectedSpecialDayBg.id);
-    return match || selectedSpecialDay.bgPresets[0];
-  }, [activeTab, selectedBdayBg, selectedAnniBg, selectedFestivalBg, selectedFestival, selectedSpecialDayBg, selectedSpecialDay]);
+  };
 
-  // Active Background URL (custom or preset)
-  const currentBgUrl = useMemo(() => {
-    if (isUsingCustomBg && customBgUrl) return customBgUrl;
-    return currentBgPreset.fullUrl;
-  }, [isUsingCustomBg, customBgUrl, currentBgPreset]);
+  // Determine current active background preset
+  const currentBgPreset: BackgroundPreset = useMemo(() => {
+    if (isUsingCustomBg && customBgPreset) {
+      return customBgPreset;
+    }
+    switch (activeTab) {
+      case 'birthday':
+        return selectedBdayBg;
+      case 'anniversary':
+        return selectedAnniBg;
+      case 'festivals':
+        return selectedFestivalBg;
+      case 'days':
+        return selectedSpecialDayBg;
+      default:
+        return selectedBdayBg;
+    }
+  }, [
+    activeTab,
+    isUsingCustomBg,
+    customBgPreset,
+    selectedBdayBg,
+    selectedAnniBg,
+    selectedFestivalBg,
+    selectedSpecialDayBg,
+  ]);
 
-  // Generate dynamic occasion titles, salutations, and messages
-  const currentContent = useMemo(() => {
-    const isGu = greetingLang === 'gu';
-    const isHi = greetingLang === 'hi';
+  // Pre-load background image whenever preset changes
+  useEffect(() => {
+    if (!currentBgPreset.fullUrl) return;
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = currentBgPreset.fullUrl;
+
+    img.onload = () => {
+      bgImageRef.current = img;
+      triggerRender();
+    };
+
+    img.onerror = () => {
+      // Fallback to thumbnail URL if full URL fails
+      if (currentBgPreset.thumbnailUrl && currentBgPreset.thumbnailUrl !== currentBgPreset.fullUrl) {
+        const fallbackImg = new Image();
+        fallbackImg.crossOrigin = 'anonymous';
+        fallbackImg.src = currentBgPreset.thumbnailUrl;
+        fallbackImg.onload = () => {
+          bgImageRef.current = fallbackImg;
+          triggerRender();
+        };
+        fallbackImg.onerror = () => {
+          bgImageRef.current = null;
+          triggerRender();
+        };
+      } else {
+        bgImageRef.current = null;
+        triggerRender();
+      }
+    };
+  }, [currentBgPreset]);
+
+  // Pre-load customer photo
+  useEffect(() => {
+    if (!hasCustomerPhoto || !customerPhotoUrl) {
+      customerPhotoRef.current = null;
+      triggerRender();
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = customerPhotoUrl;
+    img.onload = () => {
+      customerPhotoRef.current = img;
+      triggerRender();
+    };
+    img.onerror = () => {
+      customerPhotoRef.current = null;
+      triggerRender();
+    };
+  }, [hasCustomerPhoto, customerPhotoUrl]);
+
+  // Pre-load advisor photo
+  useEffect(() => {
+    if (!advisorAvatarUrl) {
+      advisorPhotoRef.current = null;
+      triggerRender();
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = advisorAvatarUrl;
+    img.onload = () => {
+      advisorPhotoRef.current = img;
+      triggerRender();
+    };
+    img.onerror = () => {
+      advisorPhotoRef.current = null;
+      triggerRender();
+    };
+  }, [advisorAvatarUrl]);
+
+  // Compute wishes and titles based on occasion & language
+  const greetingContent = useMemo(() => {
+    let defaultTitle = 'HAPPY BIRTHDAY';
+    let defaultWishes =
+      'Wishing you a day filled with immense joy, everlasting prosperity, and sound financial abundance for all your future milestones!';
+    let defaultSalutation = `Dear ${recipientName}`;
+    let icon = '🎂';
 
     if (activeTab === 'birthday') {
-      const defaultSalutation = isGu
-        ? `સ્નેહીશ્રી ${recipientName || 'મિત્ર'},`
-        : isHi
-        ? `आदरणीय ${recipientName || 'मित्र'},`
-        : `Dear ${recipientName || 'Valued Client'},`;
-
-      const defaultMsg = isGu
-        ? `આપના જન્મદિવસના આ વિશેષ અવસરે આપને દીર્ઘાયુષ્ય, ઉત્તમ સ્વાસ્થ્ય, મનની શાંતિ અને અખૂટ આર્થિક સમૃદ્ધિની પ્રભુચરણે પ્રાર્થના.\n\nઆવનારું નવું વર્ષ આપના તમામ લક્ષ્યાંકો અને સપનાઓને સાકાર કરે તેવી હૃદયપૂર્વકની અભિલાષા.`
-        : isHi
-        ? `आपके जन्मदिन के इस पावन अवसर पर ईश्वर से आपके दीर्घायु, उत्तम स्वास्थ्य, मानसिक शांति और अटूट आर्थिक समृद्धि की मंगल कामना करते हैं।\n\nआने वाला वर्ष आपके जीवन में नए अवसर और अपार खुशियां लेकर आए।`
-        : `Wishing you a truly joyous birthday filled with good health, cherished moments, and flourishing financial prosperity.\n\nMay this coming year bring great milestones, peace of mind, and immense success to you and your loved ones.`;
-
-      const title = isGu ? 'જન્મદિવસની હાર્દિક શુભકામનાઓ' : isHi ? 'जन्मदिन की हार्दिक शुभकामनाएं' : 'Happy Birthday';
-
-      return {
-        icon: '🎂',
-        title,
-        salutation: customSalutation || defaultSalutation,
-        message: customWishText || defaultMsg,
-        signature: `${advisorName} • ${advisorDesignation}`,
-      };
+      icon = '🎂';
+      if (greetingLang === 'gu') {
+        defaultTitle = 'જન્મદિન મુબારક';
+        defaultSalutation = `સ્નેહી શ્રી ${recipientName}`;
+        defaultWishes =
+          'આપના જન્મદિવસે અનંત સુખ, ઉત્તમ સ્વાસ્થ્ય અને સમૃદ્ધિની મંગલકામનાઓ. આપના જીવનના તમામ નાણાકીય અને પારિવારિક લક્ષ્યો સિદ્ધ થાય તેવી શુભેચ્છાઓ!';
+      } else if (greetingLang === 'hi') {
+        defaultTitle = 'जन्मदिन की हार्दिक शुभकामनाएं';
+        defaultSalutation = `प्रिय ${recipientName}`;
+        defaultWishes =
+          'ईश्वर से प्रार्थना है कि आपका यह जन्मदिन आपके जीवन में उत्तम स्वास्थ्य, अपार खुशियाँ और वित्तीय समृद्धि लेकर आए।';
+      } else {
+        defaultTitle = 'HAPPY BIRTHDAY';
+        defaultSalutation = `Dear ${recipientName}`;
+        defaultWishes =
+          'May this special year bring you good health, joy, and fulfilling prosperity. Wishing you continued success and great financial well-being!';
+      }
+    } else if (activeTab === 'anniversary') {
+      icon = '💍';
+      if (greetingLang === 'gu') {
+        defaultTitle = 'લગ્ન વર્ષગાંઠની શુભકામના';
+        defaultSalutation = `શ્રી અને શ્રીમતી ${recipientName}`;
+        defaultWishes =
+          'આપના દાંપત્ય જીવનમાં પ્રેમ, સુમેળ અને સમૃદ્ધિ હંમેશાં વધતાં રહે. આપનું પારિવારિક અને નાણાકીય ભવિષ્ય ઉજ્જવળ રહે તેવી હાર્દિક પ્રાર્થના!';
+      } else if (greetingLang === 'hi') {
+        defaultTitle = 'शादी की सालगिरह मुबारक';
+        defaultSalutation = `श्री और श्रीमती ${recipientName}`;
+        defaultWishes =
+          'आपके वैवाहिक जीवन में प्रेम, विश्वास और वित्तीय संपन्नता सदैव बनी रहे। आपको सुखद भविष्य की अनंत शुभकामनाएं!';
+      } else {
+        defaultTitle = 'HAPPY ANNIVERSARY';
+        defaultSalutation = `Mr. & Mrs. ${recipientName}`;
+        defaultWishes =
+          'Wishing a fantastic couple a very happy wedding anniversary! May your bond of love and shared financial dreams grow stronger with each passing year.';
+      }
+    } else if (activeTab === 'festivals') {
+      icon = selectedFestival.icon || '🪔';
+      defaultTitle =
+        greetingLang === 'gu'
+          ? selectedFestival.nameGu
+          : greetingLang === 'hi'
+          ? selectedFestival.nameHi
+          : selectedFestival.name.toUpperCase();
+      defaultSalutation =
+        greetingLang === 'gu'
+          ? `આદરણીય ${recipientName}`
+          : greetingLang === 'hi'
+          ? `आदरणीय ${recipientName}`
+          : `Dear ${recipientName}`;
+      defaultWishes =
+        greetingLang === 'gu'
+          ? selectedFestival.defaultWishesGu
+          : greetingLang === 'hi'
+          ? selectedFestival.defaultWishesHi
+          : selectedFestival.defaultWishesEn;
+    } else if (activeTab === 'days') {
+      icon = selectedSpecialDay.icon || '🌟';
+      defaultTitle =
+        greetingLang === 'gu'
+          ? selectedSpecialDay.nameGu
+          : greetingLang === 'hi'
+          ? selectedSpecialDay.nameHi
+          : selectedSpecialDay.name.toUpperCase();
+      defaultSalutation =
+        greetingLang === 'gu'
+          ? `આદરણીય ${recipientName}`
+          : greetingLang === 'hi'
+          ? `आदरणीय ${recipientName}`
+          : `Dear ${recipientName}`;
+      defaultWishes =
+        greetingLang === 'gu'
+          ? selectedSpecialDay.defaultWishesGu
+          : greetingLang === 'hi'
+          ? selectedSpecialDay.defaultWishesHi
+          : selectedSpecialDay.defaultWishesEn;
     }
-
-    if (activeTab === 'anniversary') {
-      const defaultSalutation = isGu
-        ? `સ્નેહીશ્રી ${recipientName || 'દંપતી'},`
-        : isHi
-        ? `आदरणीय ${recipientName || 'दंपति'},`
-        : `Dear ${recipientName || 'Couple'},`;
-
-      const defaultMsg = isGu
-        ? `આપના લગ્ન જીવનના પવિત્ર બંધનની વર્ષગાંઠ નિમિત્તે આપ બંનેને હૃદયપૂર્વકની શુભેચ્છાઓ!\n\nઆપનું દામ્પત્ય જીવન પ્રેમ, પરસ્પર વિશ્વાસ, ઉત્તમ સ્વાસ્થ્ય અને પરિપૂર્ણ નાણાકીય સ્થિરતાથી સદાય મહેકતું રહે તેવી મંગલ કામના.`
-        : isHi
-        ? `आप दोनों को शादी की सालगिरह की ढेरों बधाइयां!\n\nईश्वर से प्रार्थना है कि आपका दांपत्य जीवन प्रेम, सामंजस्य, स्वास्थ्य और निरंतर समृद्धि से सदा आलोकित रहे।`
-        : `Heartiest congratulations on your wedding anniversary!\n\nMay your journey together continue to be blessed with boundless love, shared joy, vibrant health, and lasting financial security.`;
-
-      const title = isGu ? 'લગ્ન વર્ષગાંઠની શુભકામનાઓ' : isHi ? 'विवाह वर्षगांठ की शुभकामनाएं' : 'Happy Wedding Anniversary';
-
-      return {
-        icon: '💍',
-        title,
-        salutation: customSalutation || defaultSalutation,
-        message: customWishText || defaultMsg,
-        signature: `${advisorName} • ${advisorDesignation}`,
-      };
-    }
-
-    if (activeTab === 'festivals') {
-      const festName = isGu ? selectedFestival.nameGu : isHi ? selectedFestival.nameHi : selectedFestival.name;
-      const festWishes = isGu ? selectedFestival.defaultWishesGu : isHi ? selectedFestival.defaultWishesHi : selectedFestival.defaultWishesEn;
-      const defaultSalutation = isGu
-        ? `સ્નેહીશ્રી ${recipientName || 'પરિવારજન'},`
-        : isHi
-        ? `आदरणीय ${recipientName || 'परिवार'},`
-        : `Dear ${recipientName || 'Friend'},`;
-
-      return {
-        icon: selectedFestival.icon,
-        title: festName,
-        salutation: customSalutation || defaultSalutation,
-        message: customWishText || festWishes,
-        signature: `${advisorName} • ${advisorDesignation}`,
-      };
-    }
-
-    // Special Days
-    const dayName = isGu ? selectedSpecialDay.nameGu : isHi ? selectedSpecialDay.nameHi : selectedSpecialDay.name;
-    const dayWishes = isGu ? selectedSpecialDay.defaultWishesGu : isHi ? selectedSpecialDay.defaultWishesHi : selectedSpecialDay.defaultWishesEn;
-    const defaultSalutation = isGu
-      ? `સ્નેહીશ્રી ${recipientName || 'મિત્ર'},`
-      : isHi
-      ? `आदरणीय ${recipientName || 'मित्र'},`
-      : `Dear ${recipientName || 'Valued Associate'},`;
 
     return {
-      icon: selectedSpecialDay.icon,
-      title: dayName,
+      title: defaultTitle,
       salutation: customSalutation || defaultSalutation,
-      message: customWishText || dayWishes,
-      signature: `${advisorName} • ${advisorDesignation}`,
+      message: customWishText || defaultWishes,
+      icon,
     };
   }, [
     activeTab,
@@ -291,52 +420,13 @@ export const GreetingsStudio: React.FC<GreetingsStudioProps> = ({
     selectedSpecialDay,
     customWishText,
     customSalutation,
-    advisorName,
-    advisorDesignation,
   ]);
 
-  // Load and Render Canvas
+  // Main Canvas Render Trigger (100% Background Immunity)
   const triggerRender = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
+    if (!canvasRef.current) return;
     setIsRendering(true);
 
-    // 1. Prepare Background Image Element
-    let bgImgEl: HTMLImageElement | null = null;
-    if (currentBgUrl) {
-      try {
-        bgImgEl = await new Promise<HTMLImageElement | null>((res) => {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => res(img);
-          img.onerror = () => res(null); // Fallback gracefully to procedural gradient
-          img.src = currentBgUrl;
-        });
-      } catch (e) {
-        bgImgEl = null;
-      }
-    }
-    bgImageRef.current = bgImgEl;
-
-    // 2. Prepare Customer Photo Element if enabled
-    let custImgEl: HTMLImageElement | null = null;
-    if (hasCustomerPhoto && customerPhotoUrl) {
-      try {
-        custImgEl = await new Promise<HTMLImageElement | null>((res) => {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => res(img);
-          img.onerror = () => res(null);
-          img.src = customerPhotoUrl;
-        });
-      } catch (e) {
-        custImgEl = null;
-      }
-    }
-    customerPhotoRef.current = custImgEl;
-
-    // 3. Assemble Advisor Branding Data
     const advisorData: AdvisorBrandingData = {
       advisorName,
       designation: advisorDesignation,
@@ -344,556 +434,1124 @@ export const GreetingsStudio: React.FC<GreetingsStudioProps> = ({
       phoneNumber,
       arnNumber,
       website,
-      showSocialIcons: true,
+      profilePhoto: advisorPhotoRef.current,
     };
 
-    // 4. Render to Canvas
-    const canvasOptions: GreetingCanvasOptions = {
-      canvas,
+    const renderOptions: GreetingCanvasOptions = {
+      canvas: canvasRef.current,
       resolution,
-      bgImage: bgImgEl,
+      aspectRatio,
+      bgImage: bgImageRef.current,
       bgPreset: currentBgPreset,
-      bgDarkness,
-      hasCustomerPhoto: hasCustomerPhoto && !!customerPhotoUrl,
-      customerPhoto: custImgEl,
+      hasCustomerPhoto,
+      customerPhoto: customerPhotoRef.current,
       customerPhotoShape,
+      customerPhotoScale,
+      customerPhotoAnchor,
+      photoOffsetX,
+      photoOffsetY,
       occasionType: activeTab,
-      occasionIcon: currentContent.icon,
-      title: currentContent.title,
+      occasionIcon: greetingContent.icon,
+      showOccasionIcon,
+      title: greetingContent.title,
       recipientName,
-      salutation: currentContent.salutation,
-      message: currentContent.message,
-      signature: currentContent.signature,
+      salutation: greetingContent.salutation,
+      message: greetingContent.message,
       advisor: advisorData,
+      footerStyle,
+      showAdvisorCard,
+      typographyTheme,
+      titleScale,
+      messageScale,
+      textAnchor,
+      textAlign,
+      textBackplate,
+      textOffsetY,
     };
 
-    await renderGreetingCard(canvasOptions);
-    setIsRendering(false);
+    try {
+      await renderGreetingCard(renderOptions);
+    } catch (err) {
+      console.error('Error rendering greeting canvas:', err);
+    } finally {
+      setIsRendering(false);
+    }
   };
 
-  // Re-render whenever parameters change
+  // Re-render when any design parameter changes
   useEffect(() => {
     triggerRender();
   }, [
     activeTab,
-    currentBgUrl,
+    aspectRatio,
+    resolution,
     currentBgPreset,
-    bgDarkness,
     hasCustomerPhoto,
-    customerPhotoUrl,
     customerPhotoShape,
-    recipientName,
-    currentContent,
+    customerPhotoScale,
+    customerPhotoAnchor,
+    photoOffsetX,
+    photoOffsetY,
+    showOccasionIcon,
+    greetingContent,
+    typographyTheme,
+    titleScale,
+    messageScale,
+    textAnchor,
+    textAlign,
+    textBackplate,
+    textOffsetY,
+    footerStyle,
+    showAdvisorCard,
     advisorName,
     advisorDesignation,
     firmName,
     phoneNumber,
     arnNumber,
     website,
-    resolution,
   ]);
 
-  // Handle Custom Background Upload from Advisor's Device
-  const handleUploadCustomBg = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File Upload Handlers
+  const handleCustomBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setCustomBgUrl(reader.result);
-        setIsUsingCustomBg(true);
-        setActionNotice('Custom background loaded from your device!');
-        setTimeout(() => setActionNotice(null), 3000);
-      }
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      const customPreset: BackgroundPreset = {
+        id: `custom_${Date.now()}`,
+        name: file.name.replace(/\.[^/.]+$/, '') || 'Custom Background',
+        thumbnailUrl: dataUrl,
+        fullUrl: dataUrl,
+        themeColor: '#1e293b',
+        secondaryColor: '#334155',
+        accentColor: '#fbbf24',
+        patternType: 'sparkles',
+      };
+      setCustomBgPreset(customPreset);
+      setIsUsingCustomBg(true);
+      setActionNotice('Custom background loaded! Original pixels preserved 100%.');
+      setTimeout(() => setActionNotice(null), 4000);
     };
     reader.readAsDataURL(file);
   };
 
-  // Handle Customer Photo Upload
-  const handleUploadCustomerPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setCustomerPhotoUrl(reader.result);
-        setHasCustomerPhoto(true);
-        setActionNotice('Customer photo attached with gold frame!');
-        setTimeout(() => setActionNotice(null), 3000);
-      }
+  const handleCustomUrlLoad = () => {
+    if (!customImageUrlInput.trim()) return;
+    const url = customImageUrlInput.trim();
+    const customPreset: BackgroundPreset = {
+      id: `url_${Date.now()}`,
+      name: 'Custom URL Artwork',
+      thumbnailUrl: url,
+      fullUrl: url,
+      themeColor: '#1e293b',
+      secondaryColor: '#334155',
+      accentColor: '#fbbf24',
+      patternType: 'sparkles',
     };
-    reader.readAsDataURL(file);
-  };
-
-  // 1-Click High-Res PNG Download (0 API calls, pure client-side)
-  const handleDownload = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    try {
-      const sanitizedName = (recipientName || 'Valued_Client').replace(/\s+/g, '_');
-      const filename = `Greeting_${activeTab.toUpperCase()}_${sanitizedName}_${resolution.toUpperCase()}.png`;
-
-      const success = downloadCanvasAsPng(canvas, filename);
-      if (success) {
-        setActionNotice(`Downloaded ${resolution === '4k' ? 'Supreme 4K' : 'Ultra HD'} Poster successfully!`);
-        setTimeout(() => setActionNotice(null), 3500);
-      }
-    } catch (err) {
-      console.error('Download error:', err);
-    }
-  };
-
-  // Share via WhatsApp with direct File share when supported, plus text caption
-  const handleShareWhatsApp = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const fullCaption = `*${currentContent.title}* ${currentContent.icon}\n\n${currentContent.salutation}\n\n${currentContent.message}\n\n━━━━━━━━━━━━━━━━━━━━\nWarm Regards,\n*${advisorName}*\n${advisorDesignation} • ${firmName}\n📱 WhatsApp/Mobile: ${phoneNumber}\n${arnNumber ? `ARN: ${arnNumber}` : ''}`;
-
-    // Check if Web Share API with Files is supported (mobile Chrome / Safari)
-    if (navigator.share && navigator.canShare) {
-      try {
-        const sanitizedName = (recipientName || 'Greeting').replace(/\s+/g, '_');
-        const filename = `${sanitizedName}_Card.png`;
-
-        canvas.toBlob(async (blob) => {
-          if (!blob) return;
-          const file = new File([blob], filename, { type: 'image/png' });
-
-          if (navigator.canShare({ files: [file] })) {
-            try {
-              await navigator.share({
-                title: currentContent.title,
-                text: fullCaption,
-                files: [file],
-              });
-              setActionNotice('Shared card directly via WhatsApp!');
-              setTimeout(() => setActionNotice(null), 3000);
-              return;
-            } catch (shareErr) {
-              // User cancelled share or fallback
-            }
-          }
-
-          // Fallback: download image and open WhatsApp
-          fallbackShareToWhatsApp(fullCaption);
-        }, 'image/png');
-        return;
-      } catch (err) {
-        // Fallback
-      }
-    }
-
-    fallbackShareToWhatsApp(fullCaption);
-  };
-
-  const fallbackShareToWhatsApp = (textCaption: string) => {
-    // 1. Download image automatically so user has it ready in gallery/downloads
-    handleDownload();
-
-    // 2. Open WhatsApp with formatted text
-    const encoded = encodeURIComponent(textCaption);
-    const webUrl = `https://api.whatsapp.com/send?text=${encoded}`;
-    const opened = window.open(webUrl, '_blank');
-    if (!opened) {
-      window.location.href = `whatsapp://send?text=${encoded}`;
-    }
-
-    setActionNotice('Poster saved to Downloads! WhatsApp opened with your custom greeting text.');
+    setCustomBgPreset(customPreset);
+    setIsUsingCustomBg(true);
+    setCustomImageUrlInput('');
+    setActionNotice('Background loaded from URL! 100% untouched source.');
     setTimeout(() => setActionNotice(null), 4000);
   };
 
-  const handleCopyText = () => {
-    const fullText = `*${currentContent.title}* ${currentContent.icon}\n\n${currentContent.salutation}\n\n${currentContent.message}\n\n━━━━━━━━━━━━━━━━━━━━\nWarm Regards,\n${advisorName}\n${advisorDesignation}\n📱 ${phoneNumber}`;
-    navigator.clipboard.writeText(fullText);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+  const handleCustomerPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setCustomerPhotoUrl(dataUrl);
+      setHasCustomerPhoto(true);
+      setActionNotice('Customer photo added to foreground layer!');
+      setTimeout(() => setActionNotice(null), 3000);
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleResetWishes = () => {
-    setCustomWishText('');
-    setCustomSalutation('');
-    setActionNotice('Reset to standard occasion message.');
-    setTimeout(() => setActionNotice(null), 2500);
+  const handleAdvisorAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setAdvisorAvatarUrl(dataUrl);
+      setActionNotice('Advisor profile photo updated in branding card!');
+      setTimeout(() => setActionNotice(null), 3000);
+    };
+    reader.readAsDataURL(file);
   };
+
+  // High-Resolution Download Action
+  const handleDownloadPng = async (forcedRes?: 'hd' | '4k') => {
+    if (!canvasRef.current) return;
+    const targetRes = forcedRes || resolution;
+
+    // If requesting a resolution different than current view, re-render temporarily to export
+    if (targetRes !== resolution) {
+      await renderGreetingCard({
+        canvas: canvasRef.current,
+        resolution: targetRes,
+        aspectRatio,
+        bgImage: bgImageRef.current,
+        bgPreset: currentBgPreset,
+        hasCustomerPhoto,
+        customerPhoto: customerPhotoRef.current,
+        customerPhotoShape,
+        customerPhotoScale,
+        customerPhotoAnchor,
+        photoOffsetX,
+        photoOffsetY,
+        occasionType: activeTab,
+        occasionIcon: greetingContent.icon,
+        showOccasionIcon,
+        title: greetingContent.title,
+        recipientName,
+        salutation: greetingContent.salutation,
+        message: greetingContent.message,
+        advisor: {
+          advisorName,
+          designation: advisorDesignation,
+          firmName,
+          phoneNumber,
+          arnNumber,
+          website,
+          profilePhoto: advisorPhotoRef.current,
+        },
+        footerStyle,
+        showAdvisorCard,
+        typographyTheme,
+        titleScale,
+        messageScale,
+        textAnchor,
+        textAlign,
+        textBackplate,
+        textOffsetY,
+      });
+    }
+
+    const cleanRecipient = recipientName.trim().replace(/\s+/g, '_') || 'Client';
+    const filename = `${cleanRecipient}_${activeTab}_${targetRes.toUpperCase()}_Greeting.png`;
+
+    downloadCanvasAsPng(canvasRef.current, filename);
+    setActionNotice(`Downloaded ${targetRes.toUpperCase()} Greeting PNG!`);
+    setTimeout(() => setActionNotice(null), 4000);
+
+    // Revert canvas to preview resolution if changed
+    if (targetRes !== resolution) {
+      triggerRender();
+    }
+  };
+
+  // Copy Canvas to Clipboard
+  const handleCopyClipboard = async () => {
+    if (!canvasRef.current) return;
+    try {
+      canvasRef.current.toBlob(async (blob) => {
+        if (!blob) return;
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'image/png': blob,
+            }),
+          ]);
+          setIsCopied(true);
+          setActionNotice('Greeting image copied to clipboard!');
+          setTimeout(() => {
+            setIsCopied(false);
+            setActionNotice(null);
+          }, 3500);
+        } catch (clipErr) {
+          console.warn('Clipboard write failed, using dataUrl fallback', clipErr);
+          setActionNotice('Please use Download button on your browser.');
+        }
+      }, 'image/png');
+    } catch (err) {
+      console.error('Clipboard copy error:', err);
+    }
+  };
+
+  // WhatsApp Web / Mobile Share
+  const handleWhatsAppShare = async () => {
+    if (!canvasRef.current) return;
+
+    const formattedMessage = `*${greetingContent.title}* 🎉\n\n${greetingContent.salutation},\n\n${greetingContent.message}\n\nWarm regards,\n*${advisorName}*\n${advisorDesignation}\n📞 ${phoneNumber}`;
+
+    // Try Web Share API with image file first
+    if (navigator.share && navigator.canShare) {
+      try {
+        canvasRef.current.toBlob(async (blob) => {
+          if (!blob) return;
+          const file = new File([blob], `${recipientName}_Greeting.png`, { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: greetingContent.title,
+              text: formattedMessage,
+              files: [file],
+            });
+            setActionNotice('Shared via WhatsApp!');
+            setTimeout(() => setActionNotice(null), 3000);
+            return;
+          }
+          // Direct WhatsApp link fallback
+          const encoded = encodeURIComponent(formattedMessage);
+          window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+        }, 'image/png');
+        return;
+      } catch (e) {
+        console.warn('Web share cancelled or unsupported', e);
+      }
+    }
+
+    // Direct WhatsApp Web / App link fallback
+    const encoded = encodeURIComponent(formattedMessage);
+    window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+    setActionNotice('WhatsApp message link opened!');
+    setTimeout(() => setActionNotice(null), 3000);
+  };
+
+  // Active canvas dimension indicators
+  const currentDimensions = useMemo(() => {
+    return getCanvasDimensions(aspectRatio, resolution, bgImageRef.current);
+  }, [aspectRatio, resolution, currentBgPreset]);
+
+  // Combined backgrounds list for active browser tab
+  const displayedLibraryPresets = useMemo(() => {
+    if (libraryCategory === 'birthday') {
+      return [...githubCatalog.birthday, ...BIRTHDAY_BACKGROUNDS];
+    }
+    if (libraryCategory === 'anniversary') {
+      return [...githubCatalog.anniversary, ...ANNIVERSARY_BACKGROUNDS];
+    }
+    if (libraryCategory === 'diwali') {
+      return githubCatalog.diwali;
+    }
+    if (libraryCategory === 'festivals') {
+      return selectedFestival.bgPresets;
+    }
+    if (libraryCategory === 'specialDays') {
+      return selectedSpecialDay.bgPresets;
+    }
+    if (libraryCategory === 'custom') {
+      return customBgPreset ? [customBgPreset] : [];
+    }
+    // 'all': Show GitHub curated set first
+    return [
+      ...githubCatalog.birthday,
+      ...githubCatalog.anniversary,
+      ...githubCatalog.diwali,
+    ];
+  }, [libraryCategory, githubCatalog, selectedFestival, selectedSpecialDay, customBgPreset]);
 
   return (
-    <div className="space-y-6 pb-24 max-w-7xl mx-auto px-2 sm:px-4">
-      {/* Top Notification Toast */}
-      {actionNotice && (
-        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-amber-500/40 flex items-center space-x-3 animate-fade-in text-xs font-bold">
-          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-          <span>{actionNotice}</span>
-        </div>
-      )}
-
-      {/* Header Banner */}
-      <div className="relative rounded-3xl bg-gradient-to-br from-amber-950 via-slate-900 to-amber-900 p-6 sm:p-8 text-white overflow-hidden shadow-2xl border border-amber-500/30">
-        <div className="relative z-10 space-y-3">
-          <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 text-xs font-bold tracking-wide backdrop-blur-md">
-            <Gift className="w-3.5 h-3.5 text-amber-400" />
-            <span>Personalized Client Relationship Studio</span>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 lg:p-6 pb-24">
+      {/* Top Header & Breadcrumb */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 lg:p-6 backdrop-blur-xl shadow-2xl">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                PRO STUDIO
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                <Lock className="w-3 h-3" /> 100% Background Lock
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-1">
+                <Github className="w-3 h-3" /> GitHub Cloud Library
+              </span>
+            </div>
+            <h1 className="text-2xl lg:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+              Client Greetings Studio
+              <span className="text-amber-400 text-sm font-normal">
+                (Portrait 1024×1536 • 4K Engine)
+              </span>
+            </h1>
+            <p className="text-sm text-slate-400 mt-1">
+              Create immaculate, personalized greetings with zero background modification, custom client portraits, and advisor branding.
+            </p>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-            Client Greetings, Festivals & Days Studio
-          </h1>
-
-          <p className="text-amber-100/90 text-xs sm:text-sm max-w-3xl leading-relaxed">
-            Create high-converting, personalized branded greeting posters in Ultra HD & 4K for your clients.
-            Pre-loaded with 15+ Birthday themes, 15+ Anniversary designs, 50+ Major Indian Festivals, and 50+ Special Days.
-            Supports customer photo frames and complete financial advisor branding with zero API costs.
-          </p>
-
-          {/* 4 Main Category Tabs */}
-          <div className="pt-2 flex flex-wrap gap-2 text-xs font-bold">
+          {/* Quick Action Toolbar */}
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
-              onClick={() => {
-                setActiveTab('birthday');
-                setIsUsingCustomBg(false);
-              }}
-              className={`px-4 py-2.5 rounded-xl flex items-center space-x-2 transition-all cursor-pointer ${
-                activeTab === 'birthday'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-black ring-2 ring-amber-400/40'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
+              onClick={() => handleDownloadPng('hd')}
+              className="px-4 py-2.5 rounded-xl font-semibold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-2 transition-all shadow-md active:scale-95"
+              title="Download 1024×1536 Portrait PNG"
             >
-              <Cake className="w-4 h-4" />
-              <span>Birthday Studio (15+ Designs)</span>
+              <Download className="w-4 h-4 text-emerald-400" />
+              Download HD
             </button>
 
             <button
-              onClick={() => {
-                setActiveTab('anniversary');
-                setIsUsingCustomBg(false);
-              }}
-              className={`px-4 py-2.5 rounded-xl flex items-center space-x-2 transition-all cursor-pointer ${
-                activeTab === 'anniversary'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-black ring-2 ring-amber-400/40'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
+              onClick={() => handleDownloadPng('4k')}
+              className="px-4 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all active:scale-95"
+              title="Download Ultra High-Res 4K (2048×3072)"
             >
-              <Heart className="w-4 h-4" />
-              <span>Anniversary Studio (15+ Designs)</span>
+              <Sparkles className="w-4 h-4 fill-slate-950" />
+              Download 4K Ultra
             </button>
 
             <button
-              onClick={() => {
-                setActiveTab('festivals');
-                setIsUsingCustomBg(false);
-              }}
-              className={`px-4 py-2.5 rounded-xl flex items-center space-x-2 transition-all cursor-pointer ${
-                activeTab === 'festivals'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-black ring-2 ring-amber-400/40'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
+              onClick={handleCopyClipboard}
+              className="px-3.5 py-2.5 rounded-xl text-sm font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-all active:scale-95"
+              title="Copy image to clipboard"
             >
-              <Sparkles className="w-4 h-4" />
-              <span>50+ Festivals (તહેવારો)</span>
+              {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              {isCopied ? 'Copied' : 'Copy'}
             </button>
 
             <button
-              onClick={() => {
-                setActiveTab('days');
-                setIsUsingCustomBg(false);
-              }}
-              className={`px-4 py-2.5 rounded-xl flex items-center space-x-2 transition-all cursor-pointer ${
-                activeTab === 'days'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-black ring-2 ring-amber-400/40'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
+              onClick={handleWhatsAppShare}
+              className="px-4 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25 flex items-center gap-2 transition-all active:scale-95"
+              title="Share to WhatsApp"
             >
-              <Sun className="w-4 h-4" />
-              <span>50+ Special Days (મહત્વના દિવસો)</span>
+              <Share2 className="w-4 h-4" />
+              WhatsApp
             </button>
           </div>
         </div>
       </div>
 
-      {/* Main Studio Grid: Controls (Left) & Canvas Preview (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Customization Controls (5 cols) */}
-        <div className="lg:col-span-5 space-y-5">
-          {/* 1. Recipient Details & Language */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-            <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
-              <User className="w-4 h-4 text-amber-600" />
-              <span>Client Name & Language Settings</span>
-            </h3>
+      {/* Action Notification Toast */}
+      {actionNotice && (
+        <div className="fixed top-6 right-6 z-50 bg-slate-900 border border-amber-500/40 text-slate-100 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-fade-in backdrop-blur-md">
+          <CheckCircle2 className="w-5 h-5 text-amber-400" />
+          <span className="text-sm font-medium">{actionNotice}</span>
+        </div>
+      )}
 
-            {/* Recipient Name Input */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Client / Recipient Name (કસ્ટમરનું નામ)
-              </label>
-              <input
-                type="text"
-                value={recipientName}
-                onChange={(e) => setRecipientName(e.target.value)}
-                placeholder="e.g. Rajeshbhai Patel or Mr. & Mrs. Patel"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
+      {/* Main Studio Grid: Left Canvas Workspace | Right Controls */}
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* =========================================================================
+            LEFT COLUMN: INTERACTIVE CANVAS WORKSPACE PREVIEW (RESPONSIVE 2:3 RATIO)
+            ========================================================================= */}
+        <div className="lg:col-span-6 xl:col-span-7 flex flex-col items-center">
+          {/* Canvas Workspace Toolbar */}
+          <div className="w-full bg-slate-900/90 border border-slate-800 rounded-t-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 backdrop-blur-md">
+            {/* Dimensions & Aspect Ratio Badge */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-300 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700/60 font-mono">
+                {currentDimensions.width} × {currentDimensions.height} px
+              </span>
+              <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md font-medium">
+                {aspectRatio === 'portrait_2_3'
+                  ? 'Vertical 2:3'
+                  : aspectRatio === 'story_9_16'
+                  ? 'Story 9:16'
+                  : aspectRatio === 'square_1_1'
+                  ? 'Square 1:1'
+                  : 'Source Auto'}
+              </span>
+              {isRendering && (
+                <span className="text-xs text-cyan-400 flex items-center gap-1 animate-pulse">
+                  <RefreshCw className="w-3 h-3 animate-spin" /> Rendering...
+                </span>
+              )}
             </div>
 
-            {/* Language Switcher */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Greeting Language (ભાષા પસંદ કરો)
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { code: 'en' as LanguageCode, label: 'English (Default)' },
-                  { code: 'gu' as LanguageCode, label: 'ગુજરાતી' },
-                  { code: 'hi' as LanguageCode, label: 'हिन्दी' },
-                ].map((l) => (
-                  <button
-                    key={l.code}
-                    onClick={() => setGreetingLang(l.code)}
-                    className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      greetingLang === l.code
-                        ? 'bg-amber-50 border-amber-500 text-amber-950 ring-2 ring-amber-500/20'
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {l.label}
-                  </button>
-                ))}
+            {/* Canvas Aspect Ratio & Resolution Selectors */}
+            <div className="flex items-center gap-2">
+              {/* Aspect Ratio Switcher */}
+              <div className="flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-800 text-xs">
+                <button
+                  onClick={() => setAspectRatio('portrait_2_3')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                    aspectRatio === 'portrait_2_3'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="2:3 Portrait (Default 1024×1536)"
+                >
+                  2:3 Portrait
+                </button>
+                <button
+                  onClick={() => setAspectRatio('story_9_16')}
+                  className={`px-2 py-1 rounded-lg font-medium transition-all ${
+                    aspectRatio === 'story_9_16'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="9:16 WhatsApp Story (1080×1920)"
+                >
+                  9:16 Story
+                </button>
+                <button
+                  onClick={() => setAspectRatio('square_1_1')}
+                  className={`px-2 py-1 rounded-lg font-medium transition-all ${
+                    aspectRatio === 'square_1_1'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="1:1 Square (1080×1080)"
+                >
+                  1:1 Square
+                </button>
+              </div>
+
+              {/* Resolution Selector */}
+              <div className="flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-800 text-xs">
+                <button
+                  onClick={() => setResolution('hd')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                    resolution === 'hd'
+                      ? 'bg-slate-700 text-white font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  HD
+                </button>
+                <button
+                  onClick={() => setResolution('4k')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                    resolution === '4k'
+                      ? 'bg-amber-500 text-slate-950 font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  4K
+                </button>
+              </div>
+
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-slate-400">
+                <button
+                  onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.1))}
+                  className="p-1 hover:text-white rounded"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[11px] font-mono px-1">{Math.round(zoomLevel * 100)}%</span>
+                <button
+                  onClick={() => setZoomLevel((z) => Math.min(1.4, z + 0.1))}
+                  className="p-1 hover:text-white rounded"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           </div>
 
-          {/* 2. Occasion Specific Selector (If Festivals or Special Days) */}
-          {activeTab === 'festivals' && (
-            <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-amber-600" />
-                  <span>Select Festival (50+ Indian Festivals)</span>
-                </h3>
-                <span className="text-[10px] font-bold text-slate-400">
-                  {filteredFestivals.length} Available
-                </span>
-              </div>
+          {/* Canvas Viewing Stage */}
+          <div className="w-full bg-slate-950/80 border-x border-b border-slate-800 rounded-b-2xl p-4 lg:p-6 flex items-center justify-center min-h-[580px] overflow-hidden relative shadow-inner">
+            {/* Background Grid Pattern */}
+            <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
 
-              {/* Search input */}
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type="text"
-                  value={festivalSearch}
-                  onChange={(e) => setFestivalSearch(e.target.value)}
-                  placeholder="Search Diwali, Navratri, Eid, Christmas, Uttarayan..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              {/* Festival List Scrollable */}
-              <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1 border border-slate-100 rounded-xl p-1 bg-slate-50/50">
-                {filteredFestivals.map((fest) => {
-                  const isSelected = selectedFestival.id === fest.id;
-                  return (
-                    <button
-                      key={fest.id}
-                      onClick={() => {
-                        setSelectedFestival(fest);
-                        setSelectedFestivalBg(fest.bgPresets[0]);
-                        setIsUsingCustomBg(false);
-                      }}
-                      className={`w-full text-left p-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-500 text-slate-950 shadow-xs'
-                          : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/60'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2 truncate">
-                        <span className="text-base shrink-0">{fest.icon}</span>
-                        <div className="truncate">
-                          <p className="truncate leading-tight">{fest.name}</p>
-                          <p className={`text-[10px] font-medium ${isSelected ? 'text-slate-900' : 'text-slate-500'}`}>
-                            {fest.nameGu}
-                          </p>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] shrink-0 font-semibold px-2 py-0.5 rounded-md ${
-                        isSelected ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {fest.month}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'days' && (
-            <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
-                  <Sun className="w-4 h-4 text-amber-600" />
-                  <span>Select Observance Day (50+ Special Days)</span>
-                </h3>
-                <span className="text-[10px] font-bold text-slate-400">
-                  {filteredSpecialDays.length} Available
-                </span>
-              </div>
-
-              {/* Search input */}
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type="text"
-                  value={specialDaySearch}
-                  onChange={(e) => setSpecialDaySearch(e.target.value)}
-                  placeholder="Search Women's Day, Engineer's Day, Doctor's Day, CA Day..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              {/* Special Day List Scrollable */}
-              <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1 border border-slate-100 rounded-xl p-1 bg-slate-50/50">
-                {filteredSpecialDays.map((day) => {
-                  const isSelected = selectedSpecialDay.id === day.id;
-                  return (
-                    <button
-                      key={day.id}
-                      onClick={() => {
-                        setSelectedSpecialDay(day);
-                        setSelectedSpecialDayBg(day.bgPresets[0]);
-                        setIsUsingCustomBg(false);
-                      }}
-                      className={`w-full text-left p-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-500 text-slate-950 shadow-xs'
-                          : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/60'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2 truncate">
-                        <span className="text-base shrink-0">{day.icon}</span>
-                        <div className="truncate">
-                          <p className="truncate leading-tight">{day.name}</p>
-                          <p className={`text-[10px] font-medium ${isSelected ? 'text-slate-900' : 'text-slate-500'}`}>
-                            {day.nameGu}
-                          </p>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] shrink-0 font-semibold px-2 py-0.5 rounded-md ${
-                        isSelected ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {day.dateStr}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 3. Background Image Selection & Device Upload */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
-                <ImageIcon className="w-4 h-4 text-amber-600" />
-                <span>Background Wallpaper (પહેલેથી લોડ કરેલા બેકગ્રાઉન્ડ)</span>
-              </h3>
-            </div>
-
-            {/* Custom Upload Button from Phone/PC */}
-            <div className="flex items-center gap-2">
-              <input
-                type="file"
-                ref={fileInputBgRef}
-                onChange={handleUploadCustomBg}
-                accept="image/*"
-                className="hidden"
+            {/* The Live HTML5 Canvas */}
+            <div
+              className="relative transition-transform duration-200 shadow-2xl rounded-xl overflow-hidden border border-slate-800 max-w-full"
+              style={{
+                transform: `scale(${zoomLevel})`,
+                transformOrigin: 'top center',
+              }}
+            >
+              <canvas
+                ref={canvasRef}
+                className="block max-w-full h-auto object-contain rounded-xl shadow-2xl"
+                style={{
+                  maxHeight: '74vh',
+                  aspectRatio: currentDimensions.cssAspect,
+                }}
               />
-              <button
-                type="button"
-                onClick={() => fileInputBgRef.current?.click()}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center space-x-2 cursor-pointer ${
-                  isUsingCustomBg
-                    ? 'bg-amber-50 border-amber-500 text-amber-950 ring-2 ring-amber-500/20'
-                    : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
-                }`}
-              >
-                <Upload className="w-3.5 h-3.5 text-amber-600" />
-                <span>Upload from Phone / Gallery</span>
-              </button>
-
-              {isUsingCustomBg && (
-                <button
-                  type="button"
-                  onClick={() => setIsUsingCustomBg(false)}
-                  className="px-3 py-2.5 rounded-xl text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 cursor-pointer"
-                  title="Switch back to pre-loaded library"
-                >
-                  Reset
-                </button>
-              )}
             </div>
+          </div>
 
-            {/* Pre-loaded Background Thumbnails Grid */}
-            <div className="space-y-2.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                <div>
-                  <p className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
-                    <span>Or Choose from Pre-Loaded Library</span>
-                    <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                      {matchingPresets.length} Relevant Themes
+          {/* Absolute Background Immunity Guarantee Card */}
+          <div className="w-full mt-3 bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between text-xs text-slate-400">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <span>
+                <strong className="text-slate-200">Zero Distortion Lock:</strong> Source artwork is rendered verbatim without color grading, darkening, or compression filters.
+              </span>
+            </div>
+            <span className="text-slate-500 font-mono text-[11px] hidden sm:inline">
+              Layered 2D Engine
+            </span>
+          </div>
+        </div>
+
+        {/* =========================================================================
+            RIGHT COLUMN: TABBED STUDIO CONTROLS (OCCASION, LIBRARY, PHOTO, BRANDING)
+            ========================================================================= */}
+        <div className="lg:col-span-6 xl:col-span-5 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden">
+          {/* Main Studio Navigation Tabs */}
+          <div className="grid grid-cols-4 border-b border-slate-800 bg-slate-950/60 p-1.5 gap-1 text-xs">
+            <button
+              onClick={() => setControlTab('occasion')}
+              className={`py-2.5 px-2 rounded-xl font-bold flex flex-col items-center gap-1 transition-all ${
+                controlTab === 'occasion'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <Gift className="w-4 h-4" />
+              <span>Wishes</span>
+            </button>
+
+            <button
+              onClick={() => setControlTab('library')}
+              className={`py-2.5 px-2 rounded-xl font-bold flex flex-col items-center gap-1 transition-all ${
+                controlTab === 'library'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span>Art Library</span>
+            </button>
+
+            <button
+              onClick={() => setControlTab('photo')}
+              className={`py-2.5 px-2 rounded-xl font-bold flex flex-col items-center gap-1 transition-all ${
+                controlTab === 'photo'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <Camera className="w-4 h-4" />
+              <span>Client Photo</span>
+            </button>
+
+            <button
+              onClick={() => setControlTab('branding')}
+              className={`py-2.5 px-2 rounded-xl font-bold flex flex-col items-center gap-1 transition-all ${
+                controlTab === 'branding'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <Award className="w-4 h-4" />
+              <span>Branding</span>
+            </button>
+          </div>
+
+          {/* Tab 1: Occasion, Client Details & Typography */}
+          {controlTab === 'occasion' && (
+            <div className="p-5 space-y-5">
+              {/* Occasion Switcher */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 block">
+                  Select Occasion Category
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  <button
+                    onClick={() => setActiveTab('birthday')}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all border ${
+                      activeTab === 'birthday'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow'
+                        : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <Cake className="w-4 h-4 text-amber-400" />
+                    <span>Birthday</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('anniversary')}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all border ${
+                      activeTab === 'anniversary'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow'
+                        : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <Heart className="w-4 h-4 text-rose-400" />
+                    <span>Anniversary</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('festivals')}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all border ${
+                      activeTab === 'festivals'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow'
+                        : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4 text-yellow-400" />
+                    <span>Festivals</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('days')}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all border ${
+                      activeTab === 'days'
+                        ? 'bg-blue-500/20 text-blue-300 border-blue-500/50 shadow'
+                        : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <Calendar className="w-4 h-4 text-blue-400" />
+                    <span>Special Days</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Sub-selector if Festivals is active */}
+              {activeTab === 'festivals' && (
+                <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                  <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                    <span>Festival Selection</span>
+                    <span className="text-[11px] text-amber-400 font-normal">
+                      {selectedFestival.name}
                     </span>
-                  </p>
-                  <p className="text-[10px] text-slate-500 font-medium">
-                    Curated exclusively for <span className="font-semibold text-slate-700">{currentEventTitle}</span>
-                  </p>
+                  </label>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Search Diwali, Holi, Navratri, Eid, Christmas..."
+                      value={festivalSearch}
+                      onChange={(e) => setFestivalSearch(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 pt-1 no-scrollbar">
+                    {FESTIVALS_LIST.filter((f) =>
+                      f.name.toLowerCase().includes(festivalSearch.toLowerCase())
+                    ).map((fest) => (
+                      <button
+                        key={fest.id}
+                        onClick={() => {
+                          setSelectedFestival(fest);
+                          setSelectedFestivalBg(fest.bgPresets[0]);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 border transition-all ${
+                          selectedFestival.id === fest.id
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
+                            : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
+                        }`}
+                      >
+                        <span>{fest.icon}</span>
+                        <span>{fest.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-selector if Special Days is active */}
+              {activeTab === 'days' && (
+                <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                  <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                    <span>Special Day Selection</span>
+                    <span className="text-[11px] text-blue-400 font-normal">
+                      {selectedSpecialDay.name} ({selectedSpecialDay.dateStr})
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Search CA Day, Doctors Day, Teachers Day, Republic Day..."
+                      value={specialDaySearch}
+                      onChange={(e) => setSpecialDaySearch(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 pt-1 no-scrollbar">
+                    {SPECIAL_DAYS_LIST.filter((d) =>
+                      d.name.toLowerCase().includes(specialDaySearch.toLowerCase())
+                    ).map((day) => (
+                      <button
+                        key={day.id}
+                        onClick={() => {
+                          setSelectedSpecialDay(day);
+                          setSelectedSpecialDayBg(day.bgPresets[0]);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 border transition-all ${
+                          selectedSpecialDay.id === day.id
+                            ? 'bg-blue-500 text-slate-950 border-blue-400 font-bold'
+                            : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
+                        }`}
+                      >
+                        <span>{day.icon}</span>
+                        <span>{day.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Client Name & Language */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1 block">
+                    Recipient / Client Name
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                    <input
+                      type="text"
+                      value={recipientName}
+                      onChange={(e) => setRecipientName(e.target.value)}
+                      placeholder="e.g. Rajeshbhai Patel"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
                 </div>
 
-                {currentEventKeywords.length > 0 && (
-                  <div className="flex items-center space-x-1 overflow-x-auto py-0.5">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider shrink-0">
-                      Keywords:
-                    </span>
-                    {currentEventKeywords.map((kw) => (
-                      <span
-                        key={kw}
-                        className="text-[9px] font-medium bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md shrink-0"
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1 block">
+                    Greeting Language
+                  </label>
+                  <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <button
+                      onClick={() => setGreetingLang('en')}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        greetingLang === 'en'
+                          ? 'bg-amber-500 text-slate-950 font-bold'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      English
+                    </button>
+                    <button
+                      onClick={() => setGreetingLang('gu')}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        greetingLang === 'gu'
+                          ? 'bg-amber-500 text-slate-950 font-bold'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      ગુજરાતી
+                    </button>
+                    <button
+                      onClick={() => setGreetingLang('hi')}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        greetingLang === 'hi'
+                          ? 'bg-amber-500 text-slate-950 font-bold'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      हिन्दी
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Salutation & Heartfelt Message */}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                    <span>Salutation Header</span>
+                    <button
+                      onClick={() => setCustomSalutation('')}
+                      className="text-[11px] text-slate-500 hover:text-amber-400"
+                    >
+                      Reset Default
+                    </button>
+                  </label>
+                  <input
+                    type="text"
+                    value={greetingContent.salutation}
+                    onChange={(e) => setCustomSalutation(e.target.value)}
+                    placeholder="e.g. Dear Rajeshbhai Patel"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-amber-300 focus:outline-none focus:border-amber-400 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                    <span>Greeting Wishes (Multi-line)</span>
+                    <button
+                      onClick={() => setCustomWishText('')}
+                      className="text-[11px] text-slate-500 hover:text-amber-400"
+                    >
+                      Reset Default
+                    </button>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={greetingContent.message}
+                    onChange={(e) => setCustomWishText(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs leading-relaxed text-slate-200 focus:outline-none focus:border-amber-400 resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Typography & Visual Positioning */}
+              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Type className="w-3.5 h-3.5 text-amber-400" /> Typography Theme & Layout
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setShowOccasionIcon(!showOccasionIcon)}
+                      className={`text-[11px] px-2 py-0.5 rounded border transition-all ${
+                        showOccasionIcon
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-slate-900 text-slate-500 border-slate-800'
+                      }`}
+                    >
+                      {showOccasionIcon ? 'Icon Visible' : 'Icon Hidden'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Typography Color Palette */}
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { id: 'gold', label: 'Royal Gold', color: '#facc15' },
+                    { id: 'pearl', label: 'Pearl White', color: '#ffffff' },
+                    { id: 'rose_gold', label: 'Rose Gold', color: '#fda4af' },
+                    { id: 'saffron', label: 'Sunset Saffron', color: '#f97316' },
+                  ].map((theme) => (
+                    <button
+                      key={theme.id}
+                      onClick={() => setTypographyTheme(theme.id as TypographyTheme)}
+                      className={`py-1.5 px-1 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 transition-all ${
+                        typographyTheme === theme.id
+                          ? 'border-amber-400 bg-amber-500/10 text-white font-bold'
+                          : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.color }} />
+                      <span className="truncate">{theme.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Text Position & Alignment Anchors */}
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-400 mb-1 block">
+                      Vertical Placement
+                    </label>
+                    <div className="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs">
+                      {(['top', 'middle', 'bottom'] as TextAnchor[]).map((anchor) => (
+                        <button
+                          key={anchor}
+                          onClick={() => setTextAnchor(anchor)}
+                          className={`py-1 rounded capitalize font-medium ${
+                            textAnchor === anchor
+                              ? 'bg-amber-500 text-slate-950 font-bold'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {anchor}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-400 mb-1 block">
+                      Text Contrast Backplate
+                    </label>
+                    <div className="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs">
+                      {[
+                        { id: 'none', label: 'None' },
+                        { id: 'subtle_badge', label: 'Shadow' },
+                        { id: 'frosted_box', label: 'Frosted' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => setTextBackplate(item.id as TextBackplate)}
+                          className={`py-1 rounded font-medium ${
+                            textBackplate === item.id
+                              ? 'bg-amber-500 text-slate-950 font-bold'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fine Offset Sliders */}
+                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Fine Y-Adjustment:</span>
+                    <input
+                      type="range"
+                      min="-0.2"
+                      max="0.2"
+                      step="0.01"
+                      value={textOffsetY}
+                      onChange={(e) => setTextOffsetY(parseFloat(e.target.value))}
+                      className="w-36 accent-amber-500"
+                    />
+                    <button
+                      onClick={() => setTextOffsetY(0)}
+                      className="text-slate-500 hover:text-amber-400 ml-1"
+                    >
+                      0
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Art Library & GitHub Repository Integration */}
+          {controlTab === 'library' && (
+            <div className="p-5 space-y-5">
+              {/* GitHub Cloud Connection Status */}
+              <div className="bg-gradient-to-r from-slate-950 to-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-slate-800 rounded-lg text-white">
+                      <Github className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                        GitHub Repository:
+                        <span className="text-amber-400 font-mono text-[11px]">
+                          {githubConfig.owner}/{githubConfig.repo}
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-400">
+                        Branch: <span className="font-mono text-slate-300">{githubConfig.branch}</span> • Auto-Sync Enabled
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleSyncGithub()}
+                      disabled={isSyncingGithub}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all"
+                      title="Fetch latest images from GitHub repository"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isSyncingGithub ? 'animate-spin' : ''}`} />
+                      <span>{isSyncingGithub ? 'Syncing...' : 'Sync Now'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => setShowGithubSettings(!showGithubSettings)}
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg border border-slate-700"
+                      title="Configure repository settings"
+                    >
+                      <Sliders className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {githubSyncNotice && (
+                  <div className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md">
+                    {githubSyncNotice}
+                  </div>
+                )}
+
+                {/* GitHub Config Modal Dropdown */}
+                {showGithubSettings && (
+                  <div className="pt-2 border-t border-slate-800 space-y-2">
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">Repo Owner</label>
+                        <input
+                          type="text"
+                          value={githubConfig.owner}
+                          onChange={(e) => setGithubConfig({ ...githubConfig, owner: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">Repo Name</label>
+                        <input
+                          type="text"
+                          value={githubConfig.repo}
+                          onChange={(e) => setGithubConfig({ ...githubConfig, repo: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">Branch</label>
+                        <input
+                          type="text"
+                          value={githubConfig.branch}
+                          onChange={(e) => setGithubConfig({ ...githubConfig, branch: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        onClick={() => {
+                          setGithubConfig(DEFAULT_GITHUB_CONFIG);
+                          saveGitHubConfig(DEFAULT_GITHUB_CONFIG);
+                          handleSyncGithub(DEFAULT_GITHUB_CONFIG);
+                        }}
+                        className="text-[11px] text-slate-400 hover:text-white"
                       >
-                        #{kw}
-                      </span>
-                    ))}
+                        Reset Defaults
+                      </button>
+                      <button
+                        onClick={() => {
+                          saveGitHubConfig(githubConfig);
+                          handleSyncGithub(githubConfig);
+                          setShowGithubSettings(false);
+                        }}
+                        className="px-3 py-1 bg-amber-500 text-slate-950 font-bold rounded text-xs"
+                      >
+                        Save & Connect
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
-              <div
-                className={`grid ${
-                  matchingPresets.length <= 3 ? 'grid-cols-3' : 'grid-cols-4'
-                } gap-2.5`}
-              >
-                {matchingPresets.map((preset, idx) => {
-                  const isSelected = !isUsingCustomBg && currentBgPreset.id === preset.id;
+              {/* Category Filter Tabs */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Browse Artwork Categories
+                  </label>
+                  <span className="text-[11px] text-slate-500">
+                    {displayedLibraryPresets.length} Artworks
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: 'all', label: '✨ All Curated' },
+                    { id: 'birthday', label: '🎂 Birthday' },
+                    { id: 'anniversary', label: '💍 Anniversary' },
+                    { id: 'diwali', label: '🪔 Diwali' },
+                    { id: 'festivals', label: '🎉 Festivals' },
+                    { id: 'specialDays', label: '🇮🇳 Special Days' },
+                    { id: 'custom', label: '📁 Custom Upload' },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setLibraryCategory(cat.id as any)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                        libraryCategory === cat.id
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow'
+                          : 'bg-slate-950/70 text-slate-400 border-slate-800 hover:text-white'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Grid of Background Thumbnails */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-[380px] overflow-y-auto pr-1 no-scrollbar">
+                {displayedLibraryPresets.map((preset) => {
+                  const isSelected = currentBgPreset.id === preset.id && !isUsingCustomBg;
                   return (
                     <button
                       key={preset.id}
-                      type="button"
                       onClick={() => {
                         setIsUsingCustomBg(false);
                         if (activeTab === 'birthday') setSelectedBdayBg(preset);
                         else if (activeTab === 'anniversary') setSelectedAnniBg(preset);
                         else if (activeTab === 'festivals') setSelectedFestivalBg(preset);
-                        else setSelectedSpecialDayBg(preset);
+                        else if (activeTab === 'days') setSelectedSpecialDayBg(preset);
                       }}
-                      className={`relative aspect-square rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group shadow-xs ${
+                      className={`group relative rounded-xl overflow-hidden aspect-[2/3] border-2 transition-all transform active:scale-95 text-left ${
                         isSelected
-                          ? 'border-amber-500 ring-2 ring-amber-500/40 shadow-md scale-[1.02]'
-                          : 'border-slate-200/90 hover:border-slate-400 opacity-85 hover:opacity-100 hover:shadow-sm'
+                          ? 'border-amber-400 ring-2 ring-amber-400/30 shadow-lg shadow-amber-500/20'
+                          : 'border-slate-800 hover:border-slate-600 opacity-80 hover:opacity-100'
                       }`}
-                      style={{
-                        background: `linear-gradient(135deg, ${preset.themeColor}, ${preset.secondaryColor})`,
-                      }}
-                      title={preset.name}
                     >
                       <img
                         src={preset.thumbnailUrl}
@@ -901,19 +1559,19 @@ export const GreetingsStudio: React.FC<GreetingsStudioProps> = ({
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                         loading="lazy"
                         onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
+                          // Image load fallback
+                          const target = e.target as HTMLImageElement;
+                          target.src = preset.fullUrl;
                         }}
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent flex flex-col justify-end p-2 pointer-events-none">
-                        <span className="text-[9px] text-amber-300/90 font-mono font-semibold uppercase tracking-wider mb-0.5">
-                          Theme {idx + 1}
-                        </span>
-                        <span className="text-[10px] text-white font-bold truncate leading-tight">
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-90" />
+                      <div className="absolute bottom-1.5 left-1.5 right-1.5">
+                        <span className="text-[10px] font-bold text-white line-clamp-1 drop-shadow">
                           {preset.name}
                         </span>
                       </div>
                       {isSelected && (
-                        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-[10px] font-black shadow-md ring-2 ring-white/50">
+                        <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-amber-500 text-slate-950 rounded-full flex items-center justify-center font-bold text-xs shadow">
                           ✓
                         </div>
                       )}
@@ -921,355 +1579,456 @@ export const GreetingsStudio: React.FC<GreetingsStudioProps> = ({
                   );
                 })}
               </div>
-            </div>
 
-            {/* Contrast / Darkness Slider */}
-            <div className="pt-1">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-600 mb-1">
-                <span className="flex items-center space-x-1.5">
-                  <Sliders className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Background Overlay Darkness</span>
-                </span>
-                <span className="font-mono text-amber-600">{Math.round(bgDarkness * 100)}%</span>
-              </div>
-              <input
-                type="range"
-                min="0.15"
-                max="0.80"
-                step="0.05"
-                value={bgDarkness}
-                onChange={(e) => setBgDarkness(parseFloat(e.target.value))}
-                className="w-full accent-amber-500 cursor-pointer"
-              />
-              <p className="text-[10px] text-slate-400">
-                Adjust overlay darkness to make text pop clearly on any uploaded photo.
-              </p>
-            </div>
-          </div>
-
-          {/* 4. Customer Photo Option (With / Without) */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
-                <Camera className="w-4 h-4 text-amber-600" />
-                <span>Customer Photo Frame (કસ્ટમર નો ફોટો)</span>
-              </h3>
-
-              {/* Mode Toggle */}
-              <button
-                type="button"
-                onClick={() => setHasCustomerPhoto(!hasCustomerPhoto)}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                  hasCustomerPhoto
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    : 'bg-slate-100 text-slate-600 border border-slate-200'
-                }`}
-              >
-                {hasCustomerPhoto ? 'With Photo: ON' : 'Without Photo: OFF'}
-              </button>
-            </div>
-
-            {hasCustomerPhoto ? (
-              <div className="space-y-3 pt-1">
-                <input
-                  type="file"
-                  ref={fileInputCustomerRef}
-                  onChange={handleUploadCustomerPhoto}
-                  accept="image/*"
-                  className="hidden"
-                />
-
-                <div className="flex items-center gap-3">
-                  {customerPhotoUrl ? (
-                    <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-amber-500 shadow-md shrink-0">
-                      <img
-                        src={customerPhotoUrl}
-                        alt="Customer portrait"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-16 h-16 rounded-full bg-slate-100 border border-dashed border-slate-300 flex items-center justify-center text-slate-400 shrink-0">
-                      <User className="w-6 h-6" />
-                    </div>
+              {/* Custom Artwork Loader & URL Input */}
+              <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5 text-amber-400" /> Upload Custom Background
+                  </span>
+                  {isUsingCustomBg && (
+                    <button
+                      onClick={() => setIsUsingCustomBg(false)}
+                      className="text-[11px] text-rose-400 hover:underline flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" /> Revert to Library
+                    </button>
                   )}
-
-                  <div className="space-y-1.5 flex-1">
-                    <button
-                      type="button"
-                      onClick={() => fileInputCustomerRef.current?.click()}
-                      className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>{customerPhotoUrl ? 'Change Photo' : 'Upload Customer Photo'}</span>
-                    </button>
-
-                    {customerPhotoUrl && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCustomerPhotoUrl(null);
-                          setHasCustomerPhoto(false);
-                        }}
-                        className="text-[11px] text-red-600 hover:underline flex items-center space-x-1 cursor-pointer"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Remove Photo</span>
-                      </button>
-                    )}
-                  </div>
                 </div>
 
-                {/* Shape options */}
-                <div className="pt-2">
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                    Frame Style:
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCustomerPhotoShape('circle')}
-                      className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        customerPhotoShape === 'circle'
-                          ? 'bg-amber-50 border-amber-500 text-amber-950 ring-2 ring-amber-500/20'
-                          : 'bg-white border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      Royal Gold Circle
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomerPhotoShape('square_rounded')}
-                      className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        customerPhotoShape === 'square_rounded'
-                          ? 'bg-amber-50 border-amber-500 text-amber-950 ring-2 ring-amber-500/20'
-                          : 'bg-white border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      Rounded Square
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-500">
-                &ldquo;Without Photo&rdquo; mode is active. The poster will automatically expand the occasion typography and celebratory graphics evenly across the card.
-              </p>
-            )}
-          </div>
-
-          {/* 5. Custom Wishes Message Editor */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
-                <Gift className="w-4 h-4 text-amber-600" />
-                <span>Greeting Message (શુભેચ્છા સંદેશ)</span>
-              </h3>
-              <button
-                type="button"
-                onClick={handleResetWishes}
-                className="text-[11px] font-bold text-amber-700 hover:text-amber-800 flex items-center space-x-1 cursor-pointer"
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span>Reset to Standard</span>
-              </button>
-            </div>
-
-            <textarea
-              rows={4}
-              value={customWishText || currentContent.message}
-              onChange={(e) => setCustomWishText(e.target.value)}
-              placeholder="Edit your personalized heartfelt message..."
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-            />
-          </div>
-
-          {/* 6. Advisor Branding Footer Customizer (Drawer) */}
-          <div className="bg-slate-900 text-white rounded-3xl p-5 shadow-md border border-slate-800 space-y-3">
-            <div
-              className="flex items-center justify-between cursor-pointer select-none"
-              onClick={() => setShowAdvisorEditor(!showAdvisorEditor)}
-            >
-              <div className="flex items-center space-x-2 text-xs font-bold text-amber-400">
-                <Award className="w-4 h-4" />
-                <span>Advisor Branding Footer on Card (સંપૂર્ણ બ્રાન્ડિંગ)</span>
-              </div>
-              <div className="flex items-center space-x-1 text-slate-400 text-xs font-medium">
-                <span>{showAdvisorEditor ? 'Hide Fields' : 'Edit Details'}</span>
-                {showAdvisorEditor ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </div>
-            </div>
-
-            <p className="text-[11px] text-slate-300">
-              Attached at bottom of the card: Name, Designation, AMFI ARN, Phone, and Firm info.
-            </p>
-
-            {showAdvisorEditor && (
-              <div className="pt-3 border-t border-slate-800 space-y-2.5">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-400 mb-0.5">Advisor Name</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    onClick={() => fileInputBgRef.current?.click()}
+                    className="w-full py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Upload className="w-4 h-4 text-emerald-400" />
+                    <span>Upload Image File</span>
+                  </button>
                   <input
-                    type="text"
-                    value={advisorName}
-                    onChange={(e) => setAdvisorName(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white"
+                    ref={fileInputBgRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCustomBgUpload}
+                    className="hidden"
                   />
-                </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 mb-0.5">Designation</label>
+                  <div className="flex items-center gap-1">
                     <input
-                      type="text"
-                      value={advisorDesignation}
-                      onChange={(e) => setAdvisorDesignation(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white"
+                      type="url"
+                      placeholder="Paste Image URL..."
+                      value={customImageUrlInput}
+                      onChange={(e) => setCustomImageUrlInput(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 mb-0.5">Firm Name</label>
-                    <input
-                      type="text"
-                      value={firmName}
-                      onChange={(e) => setFirmName(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white"
-                    />
+                    <button
+                      onClick={handleCustomUrlLoad}
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold rounded-lg text-xs border border-slate-700 whitespace-nowrap"
+                    >
+                      Load
+                    </button>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 mb-0.5">Mobile / WhatsApp</label>
-                    <input
-                      type="text"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 mb-0.5">AMFI ARN / EUIN</label>
-                    <input
-                      type="text"
-                      value={arnNumber}
-                      onChange={(e) => setArnNumber(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Square Canvas Preview & Export Suite (7 cols) */}
-        <div className="lg:col-span-7 space-y-5 lg:sticky lg:top-4">
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-7 shadow-xl space-y-5">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-sm flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-amber-600" />
-                  <span>Square Poster Canvas Preview</span>
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Zero API Cost • High-Resolution Render Engine
-                </p>
-              </div>
-
-              {/* Resolution Toggle: 1080p vs 4K */}
-              <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setResolution('hd')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    resolution === 'hd'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Ultra HD (1080p)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setResolution('4k')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    resolution === '4k'
-                      ? 'bg-amber-500 text-slate-950 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Supreme 4K (2160p)
-                </button>
               </div>
             </div>
+          )}
 
-            {/* Live Canvas Element */}
-            <div className="relative aspect-square w-full rounded-2xl overflow-hidden shadow-2xl bg-slate-950 border-2 border-amber-500/20 group">
-              <canvas
-                ref={canvasRef}
-                className="w-full h-full object-contain"
-              />
+          {/* Tab 3: Customer Photo Layer Controls */}
+          {controlTab === 'photo' && (
+            <div className="p-5 space-y-5">
+              {/* Photo Toggle */}
+              <div className="flex items-center justify-between bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+                <div>
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-amber-400" />
+                    Customer Portrait Layer
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Display recipient portrait framed with golden accents
+                  </p>
+                </div>
+                <button
+                  onClick={() => setHasCustomerPhoto(!hasCustomerPhoto)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    hasCustomerPhoto
+                      ? 'bg-emerald-500 text-slate-950 shadow'
+                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {hasCustomerPhoto ? 'Enabled' : 'Disabled'}
+                </button>
+              </div>
 
-              {isRendering && (
-                <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center text-white space-x-2">
-                  <RefreshCw className="w-5 h-5 animate-spin text-amber-400" />
-                  <span className="text-xs font-bold">Rendering High-Res Poster...</span>
+              {hasCustomerPhoto ? (
+                <>
+                  {/* Upload Customer Photo */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-300 block">
+                      Customer Photo Source
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="w-16 h-16 rounded-xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center flex-shrink-0">
+                        {customerPhotoUrl ? (
+                          <img
+                            src={customerPhotoUrl}
+                            alt="Customer"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <User className="w-6 h-6 text-slate-600" />
+                        )}
+                      </div>
+
+                      <div className="flex-1 space-y-2">
+                        <button
+                          onClick={() => fileInputCustomerRef.current?.click()}
+                          className="w-full py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                        >
+                          <Upload className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{customerPhotoUrl ? 'Change Portrait Photo' : 'Upload Client Photo'}</span>
+                        </button>
+                        <input
+                          ref={fileInputCustomerRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCustomerPhotoUpload}
+                          className="hidden"
+                        />
+                        {customerPhotoUrl && (
+                          <button
+                            onClick={() => {
+                              setCustomerPhotoUrl(null);
+                              setHasCustomerPhoto(false);
+                            }}
+                            className="text-[11px] text-rose-400 hover:underline flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" /> Remove Photo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Frame Shapes */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-300 block">
+                      Portrait Frame Shape
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { id: 'circle', label: 'Circle' },
+                        { id: 'squircle', label: 'Squircle' },
+                        { id: 'diamond', label: 'Diamond' },
+                        { id: 'gold_shield', label: 'Shield' },
+                      ].map((shape) => (
+                        <button
+                          key={shape.id}
+                          onClick={() => setCustomerPhotoShape(shape.id as PhotoShape)}
+                          className={`py-2 rounded-lg text-xs font-semibold border capitalize transition-all ${
+                            customerPhotoShape === shape.id
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-400 font-bold'
+                              : 'bg-slate-950/70 text-slate-400 border-slate-800 hover:text-white'
+                          }`}
+                        >
+                          {shape.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Position Anchors */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-300 block">
+                      Position Anchor
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'top_center', label: 'Top Center' },
+                        { id: 'top_left', label: 'Top Left' },
+                        { id: 'top_right', label: 'Top Right' },
+                        { id: 'center', label: 'Center' },
+                        { id: 'center_left', label: 'Mid Left' },
+                        { id: 'center_right', label: 'Mid Right' },
+                      ].map((anchor) => (
+                        <button
+                          key={anchor.id}
+                          onClick={() => {
+                            setCustomerPhotoAnchor(anchor.id as PhotoAnchor);
+                            setPhotoOffsetX(0);
+                            setPhotoOffsetY(0);
+                          }}
+                          className={`py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                            customerPhotoAnchor === anchor.id
+                              ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow'
+                              : 'bg-slate-950/70 text-slate-400 border-slate-800 hover:text-white'
+                          }`}
+                        >
+                          {anchor.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Size & Offset Sliders */}
+                  <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80 space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Photo Scale:</span>
+                      <input
+                        type="range"
+                        min="0.6"
+                        max="1.5"
+                        step="0.05"
+                        value={customerPhotoScale}
+                        onChange={(e) => setCustomerPhotoScale(parseFloat(e.target.value))}
+                        className="w-36 accent-amber-500"
+                      />
+                      <span className="font-mono text-slate-300 text-[11px] w-10 text-right">
+                        {Math.round(customerPhotoScale * 100)}%
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Fine X-Offset:</span>
+                      <input
+                        type="range"
+                        min="-0.3"
+                        max="0.3"
+                        step="0.01"
+                        value={photoOffsetX}
+                        onChange={(e) => setPhotoOffsetX(parseFloat(e.target.value))}
+                        className="w-36 accent-amber-500"
+                      />
+                      <button
+                        onClick={() => setPhotoOffsetX(0)}
+                        className="text-slate-500 hover:text-amber-400 text-[11px] w-10 text-right"
+                      >
+                        Reset
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Fine Y-Offset:</span>
+                      <input
+                        type="range"
+                        min="-0.3"
+                        max="0.3"
+                        step="0.01"
+                        value={photoOffsetY}
+                        onChange={(e) => setPhotoOffsetY(parseFloat(e.target.value))}
+                        className="w-36 accent-amber-500"
+                      />
+                      <button
+                        onClick={() => setPhotoOffsetY(0)}
+                        className="text-slate-500 hover:text-amber-400 text-[11px] w-10 text-right"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="p-8 text-center bg-slate-950/50 rounded-2xl border border-dashed border-slate-800 text-slate-500 space-y-2">
+                  <Camera className="w-8 h-8 mx-auto text-slate-600" />
+                  <p className="text-xs">
+                    Enable client portrait to place photo in a luxurious gold ring frame.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setHasCustomerPhoto(true);
+                      fileInputCustomerRef.current?.click();
+                    }}
+                    className="px-4 py-2 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    Upload Photo Now
+                  </button>
                 </div>
               )}
             </div>
+          )}
 
-            {/* Action Buttons: WhatsApp Share & Download */}
-            <div className="space-y-2.5 pt-2">
-              <div className="flex flex-wrap gap-2.5">
-                {/* Primary Action 1: Share on WhatsApp */}
+          {/* Tab 4: Advisor Branding & Footer Architecture */}
+          {controlTab === 'branding' && (
+            <div className="p-5 space-y-5">
+              {/* Branding Toggle */}
+              <div className="flex items-center justify-between bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+                <div>
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-amber-400" />
+                    Advisor Endorsement Card
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Safe bottom zone credentials and compliments banner
+                  </p>
+                </div>
                 <button
-                  type="button"
-                  onClick={handleShareWhatsApp}
-                  className="flex-1 min-w-[170px] px-5 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-600/30 flex items-center justify-center space-x-2 transition-all active:scale-95 cursor-pointer"
+                  onClick={() => setShowAdvisorCard(!showAdvisorCard)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    showAdvisorCard
+                      ? 'bg-emerald-500 text-slate-950 shadow'
+                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                  }`}
                 >
-                  <Share2 className="w-4 h-4 fill-white" />
-                  <span>Share on WhatsApp</span>
-                </button>
-
-                {/* Primary Action 2: Download High-Res Poster */}
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  className="flex-1 min-w-[170px] px-5 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-500/30 flex items-center justify-center space-x-2 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download {resolution === '4k' ? '4K' : 'HD'} Poster</span>
-                </button>
-
-                {/* Secondary Action 3: Copy Text Only */}
-                <button
-                  type="button"
-                  onClick={handleCopyText}
-                  className="px-4 py-3.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs border border-slate-200 shadow-2xs flex items-center justify-center space-x-1.5 transition-all active:scale-95 cursor-pointer shrink-0"
-                >
-                  {isCopied ? (
-                    <>
-                      <Check className="w-4 h-4 text-emerald-600" />
-                      <span className="text-emerald-700">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4 text-slate-600" />
-                      <span>Copy Wish</span>
-                    </>
-                  )}
+                  {showAdvisorCard ? 'Visible' : 'Hidden'}
                 </button>
               </div>
 
-              {/* Informational reassurance notice */}
-              <div className="flex items-center space-x-2 text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>
-                  <strong>100% Client-Side Generation:</strong> No third-party AI image APIs used. Unlimited high-res downloads and shares with zero latency.
-                </span>
-              </div>
+              {showAdvisorCard && (
+                <>
+                  {/* Footer Style Variants */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-300 block">
+                      Card Aesthetic Style
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'frosted_glass', label: 'Frosted Glass' },
+                        { id: 'solid_card', label: 'Midnight Solid' },
+                        { id: 'minimal_banner', label: 'Minimal Banner' },
+                        { id: 'elegant_classic', label: 'Royal Classic' },
+                        { id: 'floating_badge', label: 'Floating Badge' },
+                      ].map((style) => (
+                        <button
+                          key={style.id}
+                          onClick={() => setFooterStyle(style.id as FooterStyle)}
+                          className={`py-2 px-1 rounded-lg text-xs font-semibold border transition-all ${
+                            footerStyle === style.id
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-400 font-bold shadow'
+                              : 'bg-slate-950/70 text-slate-400 border-slate-800 hover:text-white'
+                          }`}
+                        >
+                          {style.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Advisor Photo / Avatar */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-300 block">
+                      Advisor Profile Photo
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-slate-950 border border-amber-400/60 overflow-hidden flex items-center justify-center flex-shrink-0 shadow">
+                        {advisorAvatarUrl ? (
+                          <img src={advisorAvatarUrl} alt="Advisor" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-amber-400 font-bold text-sm">
+                            {advisorName.slice(0, 2).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex-1 flex items-center gap-2">
+                        <button
+                          onClick={() => fileInputAdvisorRef.current?.click()}
+                          className="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                        >
+                          <Upload className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{advisorAvatarUrl ? 'Change Photo' : 'Upload Avatar'}</span>
+                        </button>
+                        <input
+                          ref={fileInputAdvisorRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleAdvisorAvatarUpload}
+                          className="hidden"
+                        />
+                        {advisorAvatarUrl && (
+                          <button
+                            onClick={() => setAdvisorAvatarUrl(null)}
+                            className="text-[11px] text-rose-400 hover:underline"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Advisor Form Details */}
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                          Advisor Name
+                        </label>
+                        <input
+                          type="text"
+                          value={advisorName}
+                          onChange={(e) => setAdvisorName(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                          Designation / Title
+                        </label>
+                        <input
+                          type="text"
+                          value={advisorDesignation}
+                          onChange={(e) => setAdvisorDesignation(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                          Firm / Brand Name
+                        </label>
+                        <input
+                          type="text"
+                          value={firmName}
+                          onChange={(e) => setFirmName(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                          Phone / WhatsApp Number
+                        </label>
+                        <input
+                          type="text"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                          AMFI ARN Number
+                        </label>
+                        <input
+                          type="text"
+                          value={arnNumber}
+                          onChange={(e) => setArnNumber(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                          Website / Email
+                        </label>
+                        <input
+                          type="text"
+                          value={website}
+                          onChange={(e) => setWebsite(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

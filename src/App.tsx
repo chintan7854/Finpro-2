@@ -23,6 +23,8 @@ import { LeadGenProvider } from './context/LeadGenContext';
 import { MindsetSimulatorsView } from './components/MindsetSimulatorsView';
 import { StoryStudioView } from './components/storyStudio/StoryStudioView';
 import { PresentationStudioView } from './components/presentationStudio/PresentationStudioView';
+import { FinanceQuizView } from './components/financeQuiz/FinanceQuizView';
+import { FinancePollView } from './components/financePoll/FinancePollView';
 import { FinancialSubjectId, GeneratedContent } from './types';
 
 function MainApp() {
@@ -114,6 +116,10 @@ function MainApp() {
           )}
 
           {currentView === 'simulators' && <MindsetSimulatorsView />}
+
+          {currentView === 'finance-poll' && <FinancePollView />}
+
+          {currentView === 'finance-quiz' && <FinanceQuizView />}
 
           {currentView === 'presentation-studio' && <PresentationStudioView />}
 

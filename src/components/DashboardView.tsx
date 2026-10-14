@@ -31,6 +31,8 @@ import {
   Target,
   BookOpen,
   Presentation,
+  HelpCircle,
+  Vote,
 } from 'lucide-react';
 import { FinancialSubjectId, GeneratedContent } from '../types';
 import { useClientCrm } from '../context/ClientCrmContext';
@@ -214,6 +216,52 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </h3>
               <p className="text-xs text-emerald-200 line-clamp-1">
                 Viral Indian Financial Narratives & WhatsApp
+              </p>
+            </div>
+          </div>
+
+          {/* Action: Finance Poll Generator (50 Topics & 6 Categories) */}
+          <div
+            onClick={() => onNavigate('finance-poll')}
+            className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-5 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col justify-between min-h-[140px] border border-indigo-400/50"
+          >
+            <div className="flex items-start justify-between">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 backdrop-blur-md flex items-center justify-center text-indigo-300 border border-indigo-400/30">
+                <Vote className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              </div>
+              <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-indigo-400 text-slate-950 shadow-xs">
+                50 POLLS 📊
+              </span>
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-white mb-1 group-hover:text-indigo-300 transition-colors">
+                Finance Poll Generator
+              </h3>
+              <p className="text-xs text-indigo-200 line-clamp-1">
+                WhatsApp Polls · 3 Synchronized Outputs
+              </p>
+            </div>
+          </div>
+
+          {/* Action: Finance Quiz Studio (50 Approved Topics) */}
+          <div
+            onClick={() => onNavigate('finance-quiz')}
+            className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white p-4 sm:p-5 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col justify-between min-h-[140px] border border-emerald-400/50"
+          >
+            <div className="flex items-start justify-between">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 backdrop-blur-md flex items-center justify-center text-emerald-300 border border-emerald-400/30">
+                <HelpCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              </div>
+              <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-emerald-400 text-slate-950 shadow-xs">
+                50 TOPICS 🎯
+              </span>
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-white mb-1 group-hover:text-emerald-300 transition-colors">
+                Finance Quiz Studio
+              </h3>
+              <p className="text-xs text-emerald-200 line-clamp-1">
+                50 Quizzes · 10 Languages · PNG & PDF
               </p>
             </div>
           </div>

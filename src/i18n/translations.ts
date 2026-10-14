@@ -342,6 +342,7 @@ export const TRANSLATIONS: Record<LanguageCode, Record<string, string>> = {
     'nav.myContent': 'My Content',
     'nav.profile': 'Advisor Profile',
     'nav.statusStudio': 'Status Image Studio',
+    'nav.financeQuiz': 'Finance Quiz Studio',
     'nav.settings': 'Settings',
 
     // Dashboard
@@ -499,6 +500,7 @@ export const TRANSLATIONS: Record<LanguageCode, Record<string, string>> = {
     'nav.myContent': 'माय कंटेंट',
     'nav.profile': 'एडवाइजर प्रोफाइल',
     'nav.statusStudio': 'स्टेटस इमेज स्टूडियो',
+    'nav.financeQuiz': 'फाइनेंस क्विज स्टूडियो',
     'nav.settings': 'सेटिंग्स',
 
     // Dashboard
@@ -656,6 +658,7 @@ export const TRANSLATIONS: Record<LanguageCode, Record<string, string>> = {
     'nav.myContent': 'માય કન્ટેન્ટ',
     'nav.profile': 'એડવાઇઝર પ્રોફાઇલ',
     'nav.statusStudio': 'સ્ટેટસ ઇમેજ સ્ટુડિયો',
+    'nav.financeQuiz': 'ફાયનાન્સ ક્વિઝ સ્ટુડિયો',
     'nav.settings': 'સેટિંગ્સ',
 
     // Dashboard

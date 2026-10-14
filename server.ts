@@ -3,6 +3,12 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import {
+  validateQuestionAccuracy,
+  validateOptionsDistinctness,
+  buildDeterministicVerifiedQuestion,
+} from './src/utils/financeMathEngine';
+import { buildDeterministicPoll } from './src/utils/financePollEngine';
 
 dotenv.config();
 
@@ -814,6 +820,419 @@ COMPLIANCE RULES:
       success: false,
       useLocalEngine: true,
       error: error?.message || 'Slide regeneration failed',
+    });
+  }
+});
+
+// Dedicated AI Finance Quiz Generator (Advanced Multi-Step Calculation Engine)
+app.post('/api/generate-quiz', async (req, res) => {
+  const {
+    topicId,
+    topicTitle,
+    category,
+    difficulty = 'advanced',
+    questionCount = 1,
+    language = 'en',
+    clientName,
+    advisorProfile,
+    previousQuestions = [],
+  } = req.body;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+
+  if (!isKeyValid) {
+    return res.json({
+      success: false,
+      useLocalEngine: true,
+      message: 'GEMINI_API_KEY is not configured on the server. Falling back to local quiz bank.',
+    });
+  }
+
+  try {
+    const ai = getGeminiClient(apiKey);
+    const entropySeed = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+
+    const langInstructions: Record<string, string> = {
+      en: 'English (Clear, highly professional, Indian financial advisory context with Rupee values ₹)',
+      hi: 'Hindi (शुद्ध, स्वाभाविक और धाराप्रवाह हिन्दी देवनागरी लिपि)',
+      gu: 'Gujarati (પ્રામાણિક, શુદ્ધ અને અસ્ખલિત ગુજરાતી લિપિ)',
+      mr: 'Marathi (अस्खलित आणि प्रामाणिक मराठी देवनागरी लिपी)',
+      bn: 'Bengali (সহজ ও সাবলীল বাংলা লিপি)',
+      ta: 'Tamil (தெளிவான மற்றும் இயல்பான தமிழ் எழுத்துரு)',
+      te: 'Telugu (స్పష్టమైన మరియు సహజమైన తెలుగు లిపి)',
+      kn: 'Kannada (ಸ್ಪಷ್ಟ ಮತ್ತು ನಿಖರವಾದ ಕನ್ನಡ ಲಿಪಿ)',
+      ml: 'Malayalam (വ്യക്തവും സ്വാഭാവികവുമായ മലയാളം ലിപി)',
+      pa: 'Punjabi (ਸਪੱਸ਼ਟ ਅਤੇ ਸ਼ੁੱਧ ਪੰਜਾਬੀ ਗੁਰਮੁਖੀ ਲਿਪੀ)',
+    };
+
+    const targetLangDesc = langInstructions[language] || `Language Code: ${language}`;
+
+    const duplicateConstraint = Array.isArray(previousQuestions) && previousQuestions.length > 0
+      ? `\nPREVIOUSLY GENERATED QUESTIONS TO AVOID (DO NOT REPEAT OR MIMIC THESE):\n${previousQuestions.slice(-10).map((q: string) => `- ${q}`).join('\n')}\nGenerate a completely FRESH scenario with DIFFERENT numbers, names, time horizons, and financial dilemmas.\n`
+      : '';
+
+    const prompt = `You are a Senior Certified Financial Planner (CFP) and Master Financial Quiz Designer for Indian wealth managers and advisors.
+Generate a challenging, ADVANCED, CALCULATION-BASED multiple choice financial quiz on:
+Topic: "${topicTitle || topicId}"
+Category: "${category || 'Financial Planning'}"
+Target Difficulty: ADVANCED (Strictly suitable for financially knowledgeable adults, investors, and advisors; NOT elementary or beginner)
+Target Language: "${language}" (${targetLangDesc})
+Client Scenario Target: ${clientName ? `Tailored for client "${clientName}"` : 'Realistic Indian Investor Scenario'}
+Randomization Seed: ${entropySeed}
+${duplicateConstraint}
+
+THE 9 STRICT ACCURACY RULES (MANDATORY & ENFORCED VIA CODE VALIDATION):
+1. Every question must have exactly ONE unambiguously correct answer among the four options A, B, C, and D.
+2. Before generating options, independently solve the question and establish its verified correct answer.
+3. For mathematical, financial, numerical, logical, percentage, SIP, mutual fund, compound interest, loan, tax, insurance, inflation, and investment questions, calculate the answer using reliable formulas and deterministic code. Never rely on language-model estimation for arithmetic.
+4. Define all necessary assumptions, units, time periods, interest rates, compounding frequencies, payment timings, rounding rules, and calculation conventions within the question whenever they can affect the answer (e.g. "invested at the beginning of each month", "compounded monthly at 12.0% CAGR", "for exactly 15 years", "round to nearest ₹1,000").
+5. If different reasonable interpretations or calculation methods produce different answers, rewrite the question to eliminate the ambiguity before generating the options.
+6. Generate four distinct, plausible options. Independently calculate or verify every option against the exact question. Exactly one option must satisfy all stated conditions.
+7. The correct answer must appear in exactly one option. Do not use approximate values as interchangeable answers unless the question explicitly specifies an acceptable rounding precision or tolerance.
+8. For numerical questions, define the required precision and round only the final result. Ensure that the correct option matches the independently calculated result within the explicitly permitted rounding tolerance.
+9. Never create two options that are mathematically equivalent, represent the same correct result, or become correct under alternative interpretations (e.g. "₹10 Lakh" and "₹10,00,000" or same numbers in different formats).
+
+EXPLANATION & CALCULATION STEPS:
+- Provide step-by-step arithmetic showing:
+  * Step 1: Stated inputs and formulas used.
+  * Step 2: Step-by-step intermediate calculations.
+  * Step 3: Final verified result matching the correct option.
+- Ensure the explanation, calculation result, and correctIndex match 100% without discrepancy.
+- All text, options, explanations, calculations, and disclaimers MUST be fluently written in ${targetLangDesc}.
+
+Return ONLY valid JSON matching this exact structure:
+{
+  "topicId": "${topicId}",
+  "topicTitle": "${topicTitle}",
+  "language": "${language}",
+  "difficulty": "advanced",
+  "questions": [
+    {
+      "id": "q_${Date.now()}",
+      "questionTitle": "Concise descriptive title of this specific problem in ${language}",
+      "questionText": "Detailed practical multi-step scenario with explicit numbers, assumptions, and clear question prompt in ${language}",
+      "options": [
+        "Option A in ${language}",
+        "Option B in ${language}",
+        "Option C in ${language}",
+        "Option D in ${language}"
+      ],
+      "correctIndex": 0,
+      "explanation": "Comprehensive step-by-step resolution showing the financial formulas, compounding logic, and why this option is mathematically correct in ${language}",
+      "stepByStepCalculations": [
+        "Step 1: Stated inputs and formula in ${language}",
+        "Step 2: Mathematical computation in ${language}",
+        "Step 3: Final verified result in ${language}"
+      ],
+      "financialTakeaway": "Actionable financial planning principle or rule of thumb in ${language}",
+      "disclaimer": "Mutual fund investments are subject to market risks, read all scheme related documents carefully. Projections are estimates and not guaranteed.",
+      "commonTrap": "Why uneducated investors choose the wrong option in ${language}",
+      "ruleOfThumb": "Memorable rule of thumb in ${language}",
+      "advisorTip": "Personal advisory consultation prompt in ${language}"
+    }
+  ]
+}`;
+
+    let parsedData: any = null;
+    let verificationPassed = false;
+
+    // Multi-attempt verification loop with strict accuracy checks
+    for (let attempt = 0; attempt < 2 && !verificationPassed; attempt++) {
+      try {
+        const responseText = await generateContentWithFallback(ai, prompt, {
+          responseMimeType: 'application/json',
+          temperature: attempt === 0 ? 0.7 : 0.4,
+        });
+
+        const cleanedText = cleanJsonText(responseText);
+        const candidate = JSON.parse(cleanedText);
+
+        if (candidate?.questions && candidate.questions.length > 0) {
+          const q = candidate.questions[0];
+          
+          // Strict Validation using deterministic engine
+          const distinctCheck = validateOptionsDistinctness(q.options);
+          const accuracyCheck = validateQuestionAccuracy(q);
+
+          if (distinctCheck.isValid && accuracyCheck.isValid) {
+            parsedData = candidate;
+            verificationPassed = true;
+          } else {
+            console.warn(`Attempt ${attempt + 1} rejected by accuracy rules:`, distinctCheck.reason || accuracyCheck.errors.join('; '));
+          }
+        }
+      } catch (genErr) {
+        console.warn(`Generation attempt ${attempt + 1} issue:`, genErr);
+      }
+    }
+
+    if (!verificationPassed || !parsedData) {
+      // Deterministic calculation engine: produce 100% mathematically proven question
+      const deterministicQ = buildDeterministicVerifiedQuestion({
+        topicId: topicId || 'personal_financial_planning',
+        topicTitle: topicTitle || 'Personal Financial Planning',
+        category: category || 'personal_finance',
+        lang: language || 'en',
+        clientName,
+        seed: Date.now(),
+      });
+
+      return res.json({
+        success: true,
+        source: 'verified_deterministic_engine',
+        data: {
+          topicId: topicId || 'personal_financial_planning',
+          topicTitle: topicTitle || 'Personal Financial Planning',
+          language: language || 'en',
+          difficulty: 'advanced',
+          questions: [deterministicQ],
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      source: 'ai_api',
+      data: parsedData,
+    });
+  } catch (error: any) {
+    console.error('Quiz Generation API Error:', error);
+    // Even on server exception, return a verified deterministic calculation
+    const deterministicQ = buildDeterministicVerifiedQuestion({
+      topicId: req.body?.topicId || 'personal_financial_planning',
+      topicTitle: req.body?.topicTitle || 'Personal Financial Planning',
+      category: req.body?.category || 'personal_finance',
+      lang: req.body?.language || 'en',
+      clientName: req.body?.clientName,
+      seed: Date.now(),
+    });
+
+    return res.json({
+      success: true,
+      source: 'verified_deterministic_engine',
+      data: {
+        topicId: req.body?.topicId || 'personal_financial_planning',
+        topicTitle: req.body?.topicTitle || 'Personal Financial Planning',
+        language: req.body?.language || 'en',
+        difficulty: 'advanced',
+        questions: [deterministicQ],
+      },
+    });
+  }
+});
+
+// Dedicated AI Finance Poll Generator
+app.post('/api/generate-poll', async (req, res) => {
+  const {
+    topicNum,
+    topicId,
+    topicTitle,
+    category,
+    pollType,
+    language = 'en',
+    clientName,
+    advisorProfile,
+    previousPollQuestions = [],
+  } = req.body;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+
+  if (!isKeyValid) {
+    const fallbackPoll = buildDeterministicPoll({
+      topicNum: topicNum || 1,
+      topicId: topicId || 'personal_financial_planning',
+      topicTitle: topicTitle || 'Personal Financial Planning',
+      category: category || 'personal_finance',
+      pollType: pollType || 'awareness',
+      language,
+      clientName,
+      advisorProfile,
+    });
+    return res.json({
+      success: true,
+      source: 'deterministic_math_engine',
+      poll: {
+        questionText: fallbackPoll.questionText,
+        options: fallbackPoll.options,
+        isKnowledgeOrCalculation: fallbackPoll.isKnowledgeOrCalculation,
+        correctIndex: fallbackPoll.correctIndex,
+        explanation: fallbackPoll.explanation,
+        stepByStepCalculations: fallbackPoll.stepByStepCalculations,
+        educationalTakeaway: fallbackPoll.educationalTakeaway,
+      },
+    });
+  }
+
+  try {
+    const ai = getGeminiClient(apiKey);
+    const entropySeed = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+
+    const langInstructions: Record<string, string> = {
+      en: 'English (Clear, highly professional, Indian financial advisory context with Rupee values ₹)',
+      hi: 'Hindi (शुद्ध, स्वाभाविक और धाराप्रवाह हिन्दी देवनागरी लिपि)',
+      gu: 'Gujarati (પ્રામાણિક, શુદ્ધ અને અસ્ખલિત ગુજરાતી લિપિ)',
+      mr: 'Marathi (अस्खलित आणि प्रामाणिक मराठी देवनागरी लिपी)',
+      bn: 'Bengali (সহজ ও সাবলীল বাংলা লিপি)',
+      ta: 'Tamil (தெளிவான மற்றும் இயல்பான தமிழ் எழுத்துரு)',
+      te: 'Telugu (స్పష్టమైన మరియు సహజమైన తెలుగు లిపి)',
+      kn: 'Kannada (ಸ್ಪಷ್ಟ ಮತ್ತು ನಿಖರವಾದ ಕನ್ನಡ ಲಿಪಿ)',
+      ml: 'Malayalam (വ്യക്തവും സ്വാഭാവികവുമായ മലയാളം ലിപി)',
+      pa: 'Punjabi (ਸਪੱਸ਼ਟ ਅਤੇ ਸ਼ੁੱਧ ਪੰਜਾਬੀ ਗੁਰਮੁਖੀ ਲਿਪੀ)',
+    };
+
+    const targetLangDesc = langInstructions[language] || `Language Code: ${language}`;
+
+    const duplicateConstraint = Array.isArray(previousPollQuestions) && previousPollQuestions.length > 0
+      ? `\nPREVIOUSLY GENERATED POLL QUESTIONS TO AVOID (DO NOT REPEAT):\n${previousPollQuestions.slice(-10).map((q: string) => `- ${q}`).join('\n')}\nGenerate a completely FRESH scenario with DIFFERENT numbers or perspectives.\n`
+      : '';
+
+    const isFactual = pollType === 'knowledge' || pollType === 'calculation' || pollType === 'myth_vs_reality';
+
+    const factualRules = isFactual
+      ? `STRICT FACTUAL / CALCULATION ACCURACY RULES:
+1. Every question must have exactly ONE unambiguously correct answer among the 3 or 4 options.
+2. Before generating options, independently solve the problem and establish its verified correct answer.
+3. For numerical/calculation questions (SIP, compounding, EMI, tax, inflation), define all necessary assumptions, units, time periods, compounding frequency, and rounding precision explicitly in the question text.
+4. Calculate the answer using reliable formulas and deterministic code. Never rely on estimation for arithmetic.
+5. Generate 3 or 4 distinct, plausible options. No two options can be mathematically equivalent or interchangeable (e.g. ₹10 Lakh vs ₹1,000,000).
+6. Provide step-by-step arithmetic explanation and educational takeaway.`
+      : `OPEN-ENDED CLIENT ENGAGEMENT RULES:
+1. Formulate a captivating, thought-provoking question suitable for a WhatsApp poll.
+2. Provide 3 or 4 distinct, realistic options reflecting different client habits, mindsets, or preferences.
+3. Do not force a single correct answer; this poll is designed to spark audience conversation and engagement.
+4. Provide an educational takeaway or advisory perspective.`;
+
+    const prompt = `You are a Senior Certified Financial Planner (CFP) and Master WhatsApp Poll Architect for Indian wealth advisors.
+Generate a fresh, highly engaging, mobile-friendly finance poll on:
+Topic #${topicNum}: "${topicTitle || topicId}"
+Category: "${category}"
+Poll Type: "${pollType}" (${isFactual ? 'Factual / Single Verified Answer' : 'Customer Preference / Engagement'})
+Target Language: "${language}" (${targetLangDesc})
+Client Context: ${clientName ? `Tailored for client "${clientName}"` : 'Realistic Indian Investor Scenario'}
+Randomization Seed: ${entropySeed}
+${duplicateConstraint}
+
+${factualRules}
+
+CRITICAL FORMATTING RULES:
+- The questionText must be clean, natural, and directly usable in WhatsApp's "Ask question" field. Do not include markdown headers or asterisks in questionText.
+- Options must be concise (under 15 words each), clear, and mutually exclusive.
+- All text must be fluently written in ${targetLangDesc}.
+
+Return ONLY valid JSON matching this exact structure:
+{
+  "questionText": "Clean question prompt in ${language}",
+  "options": [
+    "Option 1 in ${language}",
+    "Option 2 in ${language}",
+    "Option 3 in ${language}",
+    "Option 4 in ${language}"
+  ],
+  "isKnowledgeOrCalculation": ${isFactual},
+  ${isFactual ? '"correctIndex": 0,' : ''}
+  "explanation": "Clear explanation or advisory rationale in ${language}",
+  ${isFactual ? '"stepByStepCalculations": ["Step 1...", "Step 2..."],' : ''}
+  "assumptions": "Stated assumptions in ${language}",
+  "educationalTakeaway": "Short, memorable educational takeaway or rule of thumb in ${language}"
+}`;
+
+    let parsedData: any = null;
+    let verificationPassed = false;
+
+    for (let attempt = 0; attempt < 2 && !verificationPassed; attempt++) {
+      try {
+        const responseText = await generateContentWithFallback(ai, prompt, {
+          responseMimeType: 'application/json',
+          temperature: isFactual ? 0.4 : 0.7,
+        });
+
+        const cleanedText = cleanJsonText(responseText);
+        const candidate = JSON.parse(cleanedText);
+
+        if (candidate?.questionText && Array.isArray(candidate?.options) && candidate.options.length >= 3) {
+          const cleanOpts = candidate.options.map((o: string) => (o || '').trim());
+          const unique = new Set(cleanOpts.map((o: string) => o.toLowerCase()));
+          
+          if (unique.size === cleanOpts.length) {
+            if (isFactual) {
+              if (
+                typeof candidate.correctIndex === 'number' &&
+                candidate.correctIndex >= 0 &&
+                candidate.correctIndex < cleanOpts.length
+              ) {
+                parsedData = candidate;
+                verificationPassed = true;
+              }
+            } else {
+              parsedData = candidate;
+              verificationPassed = true;
+            }
+          }
+        }
+      } catch (genErr) {
+        console.warn(`Poll generation attempt ${attempt + 1} issue:`, genErr);
+      }
+    }
+
+    if (!verificationPassed || !parsedData) {
+      const fallbackPoll = buildDeterministicPoll({
+        topicNum: topicNum || 1,
+        topicId: topicId || 'personal_financial_planning',
+        topicTitle: topicTitle || 'Personal Financial Planning',
+        category: category || 'personal_finance',
+        pollType: pollType || 'awareness',
+        language,
+        clientName,
+        advisorProfile,
+      });
+
+      return res.json({
+        success: true,
+        source: 'deterministic_math_engine',
+        poll: {
+          questionText: fallbackPoll.questionText,
+          options: fallbackPoll.options,
+          isKnowledgeOrCalculation: fallbackPoll.isKnowledgeOrCalculation,
+          correctIndex: fallbackPoll.correctIndex,
+          explanation: fallbackPoll.explanation,
+          stepByStepCalculations: fallbackPoll.stepByStepCalculations,
+          educationalTakeaway: fallbackPoll.educationalTakeaway,
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      source: 'ai_api',
+      poll: parsedData,
+    });
+  } catch (error: any) {
+    console.error('Poll Generation API Error:', error);
+    const fallbackPoll = buildDeterministicPoll({
+      topicNum: req.body?.topicNum || 1,
+      topicId: req.body?.topicId || 'personal_financial_planning',
+      topicTitle: req.body?.topicTitle || 'Personal Financial Planning',
+      category: req.body?.category || 'personal_finance',
+      pollType: req.body?.pollType || 'awareness',
+      language: req.body?.language || 'en',
+      clientName: req.body?.clientName,
+      advisorProfile: req.body?.advisorProfile,
+    });
+
+    return res.json({
+      success: true,
+      source: 'deterministic_math_engine',
+      poll: {
+        questionText: fallbackPoll.questionText,
+        options: fallbackPoll.options,
+        isKnowledgeOrCalculation: fallbackPoll.isKnowledgeOrCalculation,
+        correctIndex: fallbackPoll.correctIndex,
+        explanation: fallbackPoll.explanation,
+        stepByStepCalculations: fallbackPoll.stepByStepCalculations,
+        educationalTakeaway: fallbackPoll.educationalTakeaway,
+      },
     });
   }
 });
