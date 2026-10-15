@@ -104,6 +104,7 @@ export interface AdvisorProfile {
   website: string;
   professionalDetails: string;
   logo: string;
+  brandName?: string;
   defaultCTA: string;
   defaultDisclaimer: string;
   applicationLanguage: LanguageCode;

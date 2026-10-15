@@ -33,6 +33,7 @@ import {
   Presentation,
   HelpCircle,
   Vote,
+  Newspaper,
 } from 'lucide-react';
 import { FinancialSubjectId, GeneratedContent } from '../types';
 import { useClientCrm } from '../context/ClientCrmContext';
@@ -170,6 +171,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </h3>
               <p className="text-xs text-indigo-200 line-clamp-1">
                 Client PPTX, PDF & Deck
+              </p>
+            </div>
+          </div>
+
+          {/* Action: Finance News & Advisor Insights (10 National + 10 International + Auto 4 AM Updates) */}
+          <div
+            onClick={() => onNavigate('finance-news')}
+            className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 text-white p-4 sm:p-5 shadow-lg shadow-emerald-950/20 hover:shadow-xl hover:shadow-emerald-900/30 hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col justify-between min-h-[140px] border border-emerald-500/40"
+          >
+            <div className="flex items-start justify-between">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 backdrop-blur-md flex items-center justify-center text-emerald-300 border border-emerald-400/30">
+                <Newspaper className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              </div>
+              <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-emerald-400 text-slate-950 shadow-xs animate-pulse">
+                LIVE 20 ⚡
+              </span>
+            </div>
+            <div>
+              <h3 className="font-bold text-base sm:text-lg mb-1 text-white group-hover:text-emerald-300 transition-colors">
+                Finance News & Insights
+              </h3>
+              <p className="text-xs text-emerald-200 line-clamp-1">
+                10 National · 10 Global · 4 AM Auto Updates
               </p>
             </div>
           </div>

@@ -10,6 +10,7 @@ import {
   Zap
 } from 'lucide-react';
 import { LanguageCode } from '../types';
+import { NewsNotificationBell } from './news/NewsNotificationBell';
 
 interface HeaderProps {
   onNavigate: (view: string) => void;
@@ -79,6 +80,9 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentView }) => {
                 <strong className="text-slate-900">{subscription.creditsRemaining}</strong> credits
               </span>
             </div>
+
+            {/* News Notification Bell with unread badge */}
+            <NewsNotificationBell onOpenNews={() => onNavigate('finance-news')} />
 
             {/* Language Selector Dropdown */}
             <div className="relative" ref={menuRef}>

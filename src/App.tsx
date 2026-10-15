@@ -25,6 +25,8 @@ import { StoryStudioView } from './components/storyStudio/StoryStudioView';
 import { PresentationStudioView } from './components/presentationStudio/PresentationStudioView';
 import { FinanceQuizView } from './components/financeQuiz/FinanceQuizView';
 import { FinancePollView } from './components/financePoll/FinancePollView';
+import { FinanceNewsView } from './components/news/FinanceNewsView';
+import { FinanceNewsProvider } from './context/FinanceNewsContext';
 import { FinancialSubjectId, GeneratedContent } from './types';
 
 function MainApp() {
@@ -118,6 +120,8 @@ function MainApp() {
 
             {currentView === 'simulators' && <MindsetSimulatorsView />}
 
+            {currentView === 'finance-news' && <FinanceNewsView />}
+
             {currentView === 'finance-poll' && <FinancePollView />}
 
             {currentView === 'finance-quiz' && <FinanceQuizView />}
@@ -187,7 +191,9 @@ export default function App() {
       <AdvisorProvider>
         <ClientCrmProvider>
           <LeadGenProvider>
-            <MainApp />
+            <FinanceNewsProvider>
+              <MainApp />
+            </FinanceNewsProvider>
           </LeadGenProvider>
         </ClientCrmProvider>
       </AdvisorProvider>

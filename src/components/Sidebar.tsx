@@ -23,6 +23,7 @@ import {
   Presentation,
   HelpCircle,
   Vote,
+  Newspaper,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => 
 
   const navigation = [
     { id: 'dashboard', name: t('nav.dashboard'), icon: LayoutDashboard },
+    { id: 'finance-news', name: 'Finance News & Insights', icon: Newspaper, badge: 'LIVE 20', isEmerald: true },
     { id: 'finance-poll', name: 'Finance Poll Generator', icon: Vote, badge: '50 POLLS', isViolet: true },
     { id: 'finance-quiz', name: 'Finance Quiz Studio', icon: HelpCircle, badge: '50 QUIZ', isEmerald: true },
     { id: 'presentation-studio', name: 'Presentation Studio', icon: Presentation, badge: '40+ PPT', isIndigo: true },
