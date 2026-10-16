@@ -88,6 +88,14 @@ export const ThemePostersStudio: React.FC<ThemePostersStudioProps> = ({
   const [advisorAchievement, setAdvisorAchievement] = useState<string>(profile.achievement || '');
   const [advisorPhone, setAdvisorPhone] = useState<string>(profile.phoneNumber);
 
+  // Sync with active profile when switched
+  useEffect(() => {
+    setAdvisorName(profile.advisorName);
+    setAdvisorDesignation(profile.designation);
+    setAdvisorAchievement(profile.achievement || '');
+    setAdvisorPhone(profile.phoneNumber);
+  }, [profile.id]);
+
   // Content Data for the current theme
   const [themeData, setThemeData] = useState<ThemePosterData>(() =>
     getDefaultThemeData(initialThemeId, initialSubjectId || 'sip_mutual_fund', profile.advisorName, profile.phoneNumber, 1, language)

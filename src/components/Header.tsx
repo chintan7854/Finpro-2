@@ -19,9 +19,11 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onNavigate, currentView }) => {
   const { language, setLanguage, supportedLanguages, t } = useI18n();
-  const { profile, subscription } = useAdvisor();
+  const { profile, profiles, activeProfileId, switchActiveProfile, subscription } = useAdvisor();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const currentLangInfo = supportedLanguages.find((l) => l.code === language) || supportedLanguages[0];
 
@@ -29,6 +31,9 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentView }) => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setLangMenuOpen(false);
+      }
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setProfileMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -137,28 +142,90 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentView }) => {
               )}
             </div>
 
-            {/* Profile Avatar / Quick Nav */}
-            <button
-              onClick={() => onNavigate('profile')}
-              className={`flex items-center space-x-2 p-1 rounded-full border transition-all ${
-                currentView === 'profile'
-                  ? 'border-emerald-600 ring-2 ring-emerald-500/20'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-              title={profile.advisorName}
-            >
-              {profile.profilePhoto ? (
-                <img
-                  src={profile.profilePhoto}
-                  alt={profile.advisorName}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600">
-                  <User className="w-4 h-4" />
+            {/* Profile Avatar & Quick Active Switcher */}
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                className={`flex items-center space-x-1.5 p-1 sm:pr-2.5 rounded-full border transition-all ${
+                  currentView === 'profile'
+                    ? 'border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/50'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+                title={`Active: ${profile.profileName || profile.advisorName}`}
+              >
+                {profile.profilePhoto ? (
+                  <img
+                    src={profile.profilePhoto}
+                    alt={profile.advisorName}
+                    className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-emerald-500/30"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 shrink-0">
+                    <User className="w-4 h-4" />
+                  </div>
+                )}
+                <span className="text-xs font-bold text-slate-800 hidden lg:inline max-w-[120px] truncate">
+                  {profile.profileName || profile.advisorName}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {profileMenuOpen && (
+                <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-4 py-2 border-b border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Active Profile
+                    </p>
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {profile.profileName || profile.advisorName}
+                    </p>
+                    <p className="text-[11px] text-emerald-700 truncate">{profile.designation}</p>
+                  </div>
+
+                  <div className="py-1 max-h-56 overflow-y-auto">
+                    <p className="px-4 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Switch Profile
+                    </p>
+                    {profiles.map((p) => {
+                      const isCurr = p.id === activeProfileId;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            switchActiveProfile(p.id);
+                            setProfileMenuOpen(false);
+                          }}
+                          className={`w-full px-4 py-2 text-left flex items-center justify-between hover:bg-slate-50 transition-colors ${
+                            isCurr ? 'bg-emerald-50/60 font-bold text-emerald-900' : 'text-slate-700 text-xs font-medium'
+                          }`}
+                        >
+                          <div className="truncate pr-2">
+                            <span className="text-xs truncate block">{p.profileName || p.advisorName}</span>
+                            <span className="text-[10px] text-slate-400 truncate block">{p.designation}</span>
+                          </div>
+                          {isCurr && <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0"></span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-1.5 border-t border-slate-100 px-2 space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileMenuOpen(false);
+                        onNavigate('profile');
+                      }}
+                      className="w-full text-center py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors"
+                    >
+                      Open Advisor Master Profile
+                    </button>
+                  </div>
                 </div>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </div>

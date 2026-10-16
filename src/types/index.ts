@@ -93,24 +93,45 @@ export interface BrandingSettings {
 
 export interface AdvisorProfile {
   id: string;
+  profileName: string;
+  userId?: string;
   profilePhoto: string;
+  originalProfilePhoto?: string;
+  croppedProfilePhoto?: string;
+  noBgProfilePhoto?: string;
+  photoBackgroundMode?: 'with_bg' | 'without_bg';
   advisorName: string;
   designation: string;
   achievement: string;
+  qualifications?: string;
+  countryCode?: string;
   phoneNumber: string;
   whatsappNumber: string;
   email: string;
   location: string;
+  officeAddress?: string;
   website: string;
   professionalDetails: string;
   logo: string;
+  originalLogo?: string;
+  croppedLogo?: string;
   brandName?: string;
+  brandColor?: string;
+  socialLinks?: {
+    linkedin?: string;
+    twitter?: string;
+    instagram?: string;
+    youtube?: string;
+    facebook?: string;
+  };
   defaultCTA: string;
   defaultDisclaimer: string;
   applicationLanguage: LanguageCode;
   contentLanguage: LanguageCode;
   sameAsAppLanguage: boolean;
   brandingPreferences: BrandingSettings;
+  isDefault?: boolean;
+  createdAt?: string;
   updatedAt: string;
 }
 

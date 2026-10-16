@@ -186,14 +186,14 @@ export const GreetingsStudio: React.FC<GreetingsStudioProps> = ({
     if (initialRecipientName) setRecipientName(initialRecipientName);
   }, [initialTab, initialRecipientName]);
 
-  // Sync advisor profile
+  // Sync advisor profile when active profile changes
   useEffect(() => {
-    if (profile.advisorName && !advisorName) setAdvisorName(profile.advisorName);
-    if (profile.phoneNumber && !phoneNumber) setPhoneNumber(profile.phoneNumber);
-    if (profile.designation && !advisorDesignation) setAdvisorDesignation(profile.designation);
-    if (profile.professionalDetails && !arnNumber) setArnNumber(profile.professionalDetails);
-    if (profile.website && !website) setWebsite(profile.website);
-  }, [profile]);
+    if (profile.advisorName) setAdvisorName(profile.advisorName);
+    if (profile.phoneNumber) setPhoneNumber(profile.phoneNumber);
+    if (profile.designation) setAdvisorDesignation(profile.designation);
+    if (profile.professionalDetails) setArnNumber(profile.professionalDetails);
+    if (profile.website) setWebsite(profile.website);
+  }, [profile.id]);
 
   // Handle GitHub sync on mount or manual trigger
   const handleSyncGithub = async (config = githubConfig) => {

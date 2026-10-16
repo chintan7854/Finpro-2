@@ -73,6 +73,16 @@ export const BrandedPosterStudio: React.FC<BrandedPosterStudioProps> = ({
     content?.advisorSnapshot?.contact || profile.phoneNumber
   );
 
+  // Sync with active profile when switched
+  useEffect(() => {
+    if (!content?.advisorSnapshot) {
+      setAdvisorName(profile.advisorName);
+      setAdvisorDesignation(profile.designation);
+      setAdvisorAchievement(profile.achievement || '');
+      setAdvisorPhone(profile.phoneNumber);
+    }
+  }, [profile.id]);
+
   // Strictly dynamic subject title (never locks to stale content)
   const activeSubjectTitle = getSubjectTitle(selectedSubjectId, content?.contentLanguage || language);
 
