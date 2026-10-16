@@ -120,26 +120,40 @@ export async function optimizeImage(
 }
 
 /**
- * Strips huge base64 data URLs from an object for safe localStorage caching,
- * while leaving URL references intact.
+ * Intelligently prunes heavy original raw uploads from profile objects for safe localStorage caching,
+ * while preserving valid displayable photos and all text settings. Full original photos are safely stored in IndexedDB.
  */
 export function sanitizeProfileForLocalStorage<T extends Record<string, any>>(obj: T): T {
   if (!obj || typeof obj !== 'object') return obj;
 
-  const clone: Record<string, any> = Array.isArray(obj) ? [] : {};
+  if (Array.isArray(obj)) {
+    return obj.map((item) => sanitizeProfileForLocalStorage(item)) as unknown as T;
+  }
 
-  for (const [key, value] of Object.entries(obj)) {
-    if (typeof value === 'string' && value.startsWith('data:image/') && value.length > 25000) {
-      // Keep only first 200 chars as placeholder or truncate if needed,
-      // but better: keep a compact thumbnail or placeholder marker
-      // So localStorage doesn't hit QuotaExceededError
-      clone[key] = value.substring(0, 100) + '...[cached_in_indexeddb]';
-    } else if (value && typeof value === 'object') {
+  const clone: Record<string, any> = { ...obj };
+
+  // 1. Remove raw uncropped originals from localStorage (stored in IndexedDB)
+  if (clone.originalProfilePhoto && typeof clone.originalProfilePhoto === 'string' && clone.originalProfilePhoto.startsWith('data:image/')) {
+    clone.originalProfilePhoto = '';
+  }
+  if (clone.originalLogo && typeof clone.originalLogo === 'string' && clone.originalLogo.startsWith('data:image/')) {
+    clone.originalLogo = '';
+  }
+
+  // 2. If noBgProfilePhoto is huge, only keep if it's the active background mode
+  if (clone.noBgProfilePhoto && typeof clone.noBgProfilePhoto === 'string' && clone.noBgProfilePhoto.length > 300000) {
+    if (clone.photoBackgroundMode !== 'without_bg') {
+      clone.noBgProfilePhoto = '';
+    }
+  }
+
+  // Recursively sanitize nested objects
+  for (const [key, value] of Object.entries(clone)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
       clone[key] = sanitizeProfileForLocalStorage(value);
-    } else {
-      clone[key] = value;
     }
   }
 
   return clone as T;
 }
+

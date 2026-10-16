@@ -123,6 +123,17 @@ export function safeSetLocalStorage(key: string, value: string): boolean {
   if (typeof window === 'undefined' || !window.localStorage) return false;
 
   try {
+    // If payload is already large (> 250KB), sanitize upfront to preserve localStorage room
+    if (value.length > 250000 && (key.includes('profile') || key.includes('finadvisor'))) {
+      try {
+        const parsed = JSON.parse(value);
+        const sanitized = sanitizeProfileForLocalStorage(parsed);
+        const compacted = JSON.stringify(sanitized);
+        localStorage.setItem(key, compacted);
+        return true;
+      } catch {}
+    }
+
     localStorage.setItem(key, value);
     return true;
   } catch (err: any) {
@@ -133,8 +144,6 @@ export function safeSetLocalStorage(key: string, value: string): boolean {
       err?.number === -2146828281;
 
     if (isQuotaExceeded) {
-      console.warn(`[FinAdvisor Storage] LocalStorage quota exceeded for key: ${key}. Applying intelligent fallback.`);
-
       try {
         // Attempt to parse JSON and prune heavy base64 strings
         const parsed = JSON.parse(value);
@@ -143,19 +152,12 @@ export function safeSetLocalStorage(key: string, value: string): boolean {
 
         localStorage.setItem(key, compacted);
         return true;
-      } catch (compactErr) {
-        // If still exceeding, try freeing non-critical legacy keys
-        try {
-          // Clear any stray oversized keys if needed
-          console.warn('[FinAdvisor Storage] Preserving state in IndexedDB. LocalStorage cache omitted for this entry.');
-          return false;
-        } catch {
-          return false;
-        }
+      } catch {
+        // Graceful fallback: state is safely stored in IndexedDB
+        return false;
       }
     }
 
-    console.warn(`[FinAdvisor Storage] LocalStorage setItem error on key "${key}":`, err);
     return false;
   }
 }

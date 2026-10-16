@@ -29,6 +29,9 @@ import {
   HelpCircle,
   Phone,
   MessageCircle,
+  ArrowUp,
+  Send,
+  CheckCheck,
 } from 'lucide-react';
 
 interface FinanceArticleReaderProps {
@@ -48,13 +51,15 @@ export const FinanceArticleReader: React.FC<FinanceArticleReaderProps> = ({ arti
     isGeneratingArticle,
   } = useFinanceNews();
 
-  const { language, t } = useI18n();
+  const { language } = useI18n();
   const { profile } = useAdvisor();
 
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [copiedForWhatsApp, setCopiedForWhatsApp] = useState(false);
 
   // Editable fields state
   const [editHeadline, setEditHeadline] = useState(article.headline);
@@ -66,41 +71,79 @@ export const FinanceArticleReader: React.FC<FinanceArticleReaderProps> = ({ arti
 
   const isSaved = savedArticles.some((a) => a.id === article.id);
 
-  const handleCopyText = async () => {
-    const fullText = `*${article.headline}*
+  // Unified Advisor Details Extractor (supporting both multi-profile schema & legacy fields)
+  const getAdvisorDetails = () => {
+    const p = profile as any;
+    const name = p.fullName || p.advisorName || article.advisorCredit.name || 'Financial Advisor';
+    const designation = p.designation || article.advisorCredit.designation || 'Certified Wealth Advisor';
+    const credentials = p.amfiArn
+      ? `ARN-${p.amfiArn}`
+      : p.professionalDetails || article.advisorCredit.credentials || 'ARN / AMFI Registered Financial Advisor';
+    const contact = p.mobile || p.phoneNumber || article.advisorCredit.contact || '+91 98765 43210';
+    const whatsapp = p.whatsapp || p.whatsappNumber || p.mobile || p.phoneNumber || article.advisorCredit.whatsapp || contact;
+    const brandName = p.profileName || p.brandName || article.advisorCredit.brandName || 'FinAdvisor Pro';
+    const photo = p.croppedPhotoUrl || p.profilePhoto || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=120&q=80';
+    return { name, designation, credentials, contact, whatsapp, brandName, photo };
+  };
 
+  const buildFullArticlePlainText = () => {
+    const adv = getAdvisorDetails();
+    return `*FINANCIAL ADVISOR RESEARCH BRIEFING*
+═════════════════════════════════════
+*${article.headline}*
+
+*1. VERIFIED FACTS & REGULATORY DATA:*
 ${article.verifiedDetails}
 
-*Why This Matters to You:*
+*2. BACKGROUND & CONTEXT:*
+${article.backgroundContext}
+
+*3. WHY THIS MATTERS TO YOUR WEALTH & FAMILY:*
 ${article.whyItMatters}
 
-*Financial Impacts:*
-• Household Expenses: ${article.financialImpacts.householdExpenses || 'N/A'}
-• Inflation: ${article.financialImpacts.inflation || 'N/A'}
-• Bank FDs & Savings: ${article.financialImpacts.savingsAndFd || 'N/A'}
-• Home Loans & EMIs: ${article.financialImpacts.loansAndEmi || 'N/A'}
-• Mutual Funds & SIP: ${article.financialImpacts.sipAndMutualFunds || 'N/A'}
-• Gold & Commodities: ${article.financialImpacts.goldAndCommodities || 'N/A'}
+*4. POTENTIAL IMPACTS ACROSS 9 FINANCIAL SEGMENTS:*
+• 🏠 Household Expenses: ${article.financialImpacts.householdExpenses || 'Controlled trajectories'}
+• 📈 Inflation Dynamics: ${article.financialImpacts.inflation || 'Monitored headline trajectory'}
+• 🏦 Bank FDs & Fixed Income: ${article.financialImpacts.savingsAndFd || 'Lock-in opportunities'}
+• 💳 Home Loans & EMIs: ${article.financialImpacts.loansAndEmi || 'Stable interest rates'}
+• 🧾 Taxes & Deductions: ${article.financialImpacts.taxes || 'New tax regime thresholds & LTCG rules'}
+• 🛡️ Insurance Coverages: ${article.financialImpacts.insurance || 'Sufficient term and health covers'}
+• 📊 Mutual Funds & SIPs: ${article.financialImpacts.sipAndMutualFunds || 'Disciplined monthly compounding'}
+• 🏢 Stock Markets: ${article.financialImpacts.stockMarkets || 'Fundamentally sound diversified equity'}
+• 🥇 Gold & Commodities: ${article.financialImpacts.goldAndCommodities || 'Strategic 10-15% hedge'}
 
-*Financial Advisor's Perspective:*
-${article.advisorOpinion}
+*5. BALANCED FINANCIAL ADVISOR PERSPECTIVE:*
+"${article.advisorOpinion}"
 
-*Actionable Takeaways:*
+*6. PRACTICAL ACTIONABLE STEPS:*
 ${article.practicalConsiderations.map((c) => `✓ ${c}`).join('\n')}
 
-*Common Mistakes to Avoid:*
+*7. COMMON MISTAKES TO AVOID:*
 ${article.mistakesToAvoid.map((m) => `⚠️ ${m}`).join('\n')}
 
-*Summary & Advice:*
+*8. PLAUSIBLE FUTURE SCENARIOS:*
+• 🟢 Optimistic / Bull Case: ${article.scenarios.positive}
+• ⚪ Neutral / Base Case: ${article.scenarios.neutral}
+• 🔴 Defensive / Cautious Case: ${article.scenarios.negative}
+• 🔍 Key Monitoring Variables: ${article.scenarios.conditionsAndUncertainties}
+
+*9. SUMMARY & ADVISORY TAKEAWAY:*
 ${article.conclusion}
 
----
-*Prepared By:* ${profile.advisorName || article.advisorCredit.name}
-${profile.designation || article.advisorCredit.designation}
-${profile.professionalDetails || article.advisorCredit.credentials || 'Certified Financial Advisor'}
-Contact: ${profile.phoneNumber || article.advisorCredit.contact}
-Disclaimer: For educational purposes only. Not personalized financial advice.`;
+${article.sources && article.sources.length > 0 ? `*Sources:* ${article.sources.map((s) => s.name).join(', ')}\n` : ''}
+═════════════════════════════════════
+*Prepared for You By:*
+👤 *${adv.name}*
+💼 ${adv.designation} | ${adv.credentials}
+📞 Call: ${adv.contact}
+💬 WhatsApp: ${adv.whatsapp}
+🏢 ${adv.brandName}
 
+_Disclaimer: Compiled for educational and investor awareness purposes. Financial products carry market risks; read all scheme related documents carefully before making investment decisions._`;
+  };
+
+  const handleCopyText = async () => {
+    const fullText = buildFullArticlePlainText();
     try {
       await navigator.clipboard.writeText(fullText);
       setCopied(true);
@@ -110,11 +153,52 @@ Disclaimer: For educational purposes only. Not personalized financial advice.`;
     }
   };
 
-  const handleShareWhatsApp = () => {
-    const shortText = encodeURIComponent(
-      `*Finance Insights: ${article.headline}*\n\n${article.whyItMatters.slice(0, 240)}...\n\n*Advisor Opinion:*\n${article.advisorOpinion.slice(0, 180)}...\n\n_For personalized financial planning, contact ${profile.advisorName} (${profile.phoneNumber})_`
+  const handleShareWhatsAppComplete = async () => {
+    const fullText = buildFullArticlePlainText();
+    try {
+      await navigator.clipboard.writeText(fullText);
+      setCopiedForWhatsApp(true);
+      setTimeout(() => setCopiedForWhatsApp(false), 3000);
+    } catch {
+      // ignore
+    }
+
+    // Trigger WhatsApp via a link element without window.open
+    const encoded = encodeURIComponent(fullText);
+    let shareUrl = `https://api.whatsapp.com/send?text=${encoded}`;
+    if (encoded.length > 2500) {
+      // Browser URL length safe fallback
+      const adv = getAdvisorDetails();
+      const briefText = encodeURIComponent(
+        `*Financial Advisory Briefing: ${article.headline}*\n\n*Why It Matters:* ${article.whyItMatters.slice(0, 240)}...\n\n*Key Impact:* ${article.financialImpacts.sipAndMutualFunds || article.financialImpacts.householdExpenses || 'Asset allocation guidance'}\n\n*Advisor Perspective:* "${article.advisorOpinion.slice(0, 180)}..."\n\n*Summary:* ${article.conclusion.slice(0, 180)}...\n\n_(Note: Complete 9-point in-depth briefing copied to clipboard. Paste into chat to share full details)_\n\n*Prepared by ${adv.name}* (${adv.contact}) | ${adv.credentials}`
+      );
+      shareUrl = `https://api.whatsapp.com/send?text=${briefText}`;
+    }
+
+    const a = document.createElement('a');
+    a.href = shareUrl;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setShowWhatsAppModal(false);
+  };
+
+  const handleShareWhatsAppSummary = () => {
+    const adv = getAdvisorDetails();
+    const summaryText = encodeURIComponent(
+      `*Financial Advisor Briefing: ${article.headline}*\n\n*Why This Matters:* ${article.whyItMatters}\n\n*Advisor Perspective:* "${article.advisorOpinion}"\n\n*Recommended Action:* ${article.practicalConsiderations[0] || 'Maintain disciplined asset allocation.'}\n\n*Summary:* ${article.conclusion}\n\n*Contact:* ${adv.name} (${adv.contact}) | ${adv.credentials}`
     );
-    window.open(`https://api.whatsapp.com/send?text=${shortText}`, '_blank');
+
+    const a = document.createElement('a');
+    a.href = `https://api.whatsapp.com/send?text=${summaryText}`;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setShowWhatsAppModal(false);
   };
 
   const handleSaveEdits = () => {
@@ -150,6 +234,10 @@ Disclaimer: For educational purposes only. Not personalized financial advice.`;
     setShowDeleteConfirm(false);
     deleteSavedArticle(article.id);
     onBack();
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -233,11 +321,12 @@ Disclaimer: For educational purposes only. Not personalized financial advice.`;
           {/* Share WhatsApp */}
           <button
             type="button"
-            onClick={handleShareWhatsApp}
+            onClick={() => setShowWhatsAppModal(true)}
             className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+            title="Share verified article to clients via WhatsApp"
           >
-            <Share2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Share</span>
+            <MessageCircle className="w-4 h-4 text-emerald-600" />
+            <span className="hidden sm:inline">WhatsApp Share</span>
           </button>
 
           {/* Delete Button (if saved) */}
@@ -661,61 +750,266 @@ Disclaimer: For educational purposes only. Not personalized financial advice.`;
         </div>
 
         {/* Section 8: Final Advisor Credit Card */}
-        <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
-          <div className="flex items-center space-x-3 text-left w-full sm:w-auto">
-            <img
-              src={
-                profile.profilePhoto ||
-                'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=120&q=80'
-              }
-              alt={profile.advisorName || article.advisorCredit.name}
-              className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500"
-            />
-            <div>
-              <h4 className="text-sm font-bold text-slate-900">
-                {profile.advisorName || article.advisorCredit.name}
-              </h4>
-              <p className="text-xs text-slate-600 font-medium">
-                {profile.designation || article.advisorCredit.designation}
-              </p>
-              <p className="text-[11px] text-emerald-700 font-semibold">
-                {profile.professionalDetails || article.advisorCredit.credentials || 'ARN Registered Financial Advisor'}
-              </p>
+        {(() => {
+          const adv = getAdvisorDetails();
+          return (
+            <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+              <div className="flex items-center space-x-3 text-left w-full sm:w-auto">
+                <img
+                  src={adv.photo}
+                  alt={adv.name}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500 shadow-xs"
+                />
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">{adv.name}</h4>
+                  <p className="text-xs text-slate-600 font-medium">{adv.designation}</p>
+                  <p className="text-[11px] text-emerald-700 font-semibold">{adv.credentials}</p>
+                  {adv.brandName && (
+                    <p className="text-[10px] text-slate-400 font-medium">{adv.brandName}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                {adv.contact && (
+                  <a
+                    href={`tel:${adv.contact}`}
+                    className="flex items-center space-x-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 shadow-2xs"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{adv.contact}</span>
+                  </a>
+                )}
+
+                {adv.whatsapp && (
+                  <a
+                    href={`https://api.whatsapp.com/send?phone=${encodeURIComponent(
+                      adv.whatsapp.replace(/[^0-9]/g, '')
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>WhatsApp</span>
+                  </a>
+                )}
+              </div>
             </div>
-          </div>
-
-          <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
-            {(profile.phoneNumber || article.advisorCredit.contact) && (
-              <a
-                href={`tel:${profile.phoneNumber || article.advisorCredit.contact}`}
-                className="flex items-center space-x-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 shadow-2xs"
-              >
-                <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{profile.phoneNumber || article.advisorCredit.contact}</span>
-              </a>
-            )}
-
-            {(profile.whatsappNumber || profile.phoneNumber) && (
-              <a
-                href={`https://api.whatsapp.com/send?phone=${encodeURIComponent(
-                  profile.whatsappNumber || profile.phoneNumber
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center space-x-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs"
-              >
-                <MessageCircle className="w-3.5 h-3.5" />
-                <span>WhatsApp</span>
-              </a>
-            )}
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Compliance Disclaimer */}
         <p className="text-[10px] text-slate-400 text-center italic">
           Disclaimer: This analysis is compiled for client education and macro literacy. Financial products carry market risks; read all scheme documents carefully before making investment commitments.
         </p>
+
+        {/* Working Bottom Control Toolbar */}
+        <div className="pt-6 border-t border-slate-200">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex items-center space-x-2 text-xs sm:text-sm font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 px-3.5 py-2.5 rounded-xl transition-all shadow-2xs"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to News Dashboard</span>
+            </button>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Save / Saved */}
+              <button
+                type="button"
+                onClick={() => saveCurrentArticle(article)}
+                className={`flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  isSaved
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                }`}
+              >
+                <Bookmark className="w-4 h-4" />
+                <span>{isSaved ? 'Saved in Library' : 'Save Article'}</span>
+              </button>
+
+              {/* Edit / Save changes */}
+              {!isEditing ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 transition-colors shadow-2xs"
+                >
+                  <Edit3 className="w-4 h-4 text-slate-600" />
+                  <span>Edit</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSaveEdits}
+                  className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Changes</span>
+                </button>
+              )}
+
+              {/* Regenerate */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (article.isEdited) {
+                    setShowRegenConfirm(true);
+                  } else {
+                    handleConfirmRegenerate();
+                  }
+                }}
+                disabled={isGeneratingArticle}
+                className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 transition-colors disabled:opacity-50 shadow-2xs"
+                title="Regenerate with fresh AI analysis"
+              >
+                <RefreshCw className={`w-4 h-4 text-slate-600 ${isGeneratingArticle ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Regenerate</span>
+              </button>
+
+              {/* Copy Full Article */}
+              <button
+                type="button"
+                onClick={handleCopyText}
+                className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 transition-colors shadow-2xs"
+                title="Copy full 9-point research article"
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-600" />}
+                <span>{copied ? 'Copied Full!' : 'Copy Full Article'}</span>
+              </button>
+
+              {/* WhatsApp Share */}
+              <button
+                type="button"
+                onClick={() => setShowWhatsAppModal(true)}
+                className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>WhatsApp Share</span>
+              </button>
+
+              {/* Scroll to Top */}
+              <button
+                type="button"
+                onClick={scrollToTop}
+                className="p-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs"
+                title="Scroll back to top"
+              >
+                <ArrowUp className="w-4 h-4" />
+              </button>
+
+              {/* Delete if saved */}
+              {isSaved && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-2.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors"
+                  title="Delete saved article"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </article>
+
+      {/* WhatsApp Share Modal with Format Choices */}
+      {showWhatsAppModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2 text-emerald-600">
+                <MessageCircle className="w-6 h-6" />
+                <h3 className="font-extrabold text-base text-slate-900">Share Article on WhatsApp</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWhatsAppModal(false)}
+                className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Choose your preferred WhatsApp sharing format for clients. All options preserve advisor contact details, verified primary sources, and regulatory disclaimers.
+            </p>
+
+            <div className="space-y-3">
+              {/* Option 1: Complete In-Depth Brief */}
+              <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 hover:border-emerald-300 transition-all flex flex-col justify-between space-y-2">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-emerald-950 flex items-center space-x-1.5">
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      <span>Complete Advisory Brief (Full 9-Point Analysis)</span>
+                    </span>
+                    <span className="text-[10px] font-bold bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-full">
+                      Recommended
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    Includes verified facts, context, all 9 financial impacts, advisor perspective, action steps, common traps, scenarios, and disclaimers.
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleShareWhatsAppComplete}
+                    className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center space-x-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Complete Brief</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyText}
+                    className="py-2 px-3 bg-white hover:bg-slate-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-semibold"
+                    title="Copy to clipboard"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Option 2: Executive Client Summary */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-all flex flex-col justify-between space-y-2">
+                <div>
+                  <span className="font-bold text-sm text-slate-900 flex items-center space-x-1.5">
+                    <TrendingUp className="w-4 h-4 text-slate-600" />
+                    <span>Executive Summary (Quick 3-Paragraph Takeaway)</span>
+                  </span>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    Short, punchy summary designed for quick reading on mobile with headline, why it matters, advisor take, and direct phone link.
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleShareWhatsAppSummary}
+                    className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center space-x-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Executive Summary</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {copiedForWhatsApp && (
+              <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-900 text-xs flex items-center space-x-2 animate-in fade-in">
+                <CheckCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                <span>Complete text copied to clipboard! Ready to paste into WhatsApp if needed.</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

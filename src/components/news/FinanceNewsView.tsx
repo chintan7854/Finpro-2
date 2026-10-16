@@ -27,6 +27,9 @@ import {
   Copy,
   Trash2,
   Check,
+  ShieldAlert,
+  HelpCircle,
+  AlertTriangle,
 } from 'lucide-react';
 
 export const FinanceNewsView: React.FC = () => {
@@ -62,6 +65,47 @@ export const FinanceNewsView: React.FC = () => {
   const [copiedSavedId, setCopiedSavedId] = useState<string | null>(null);
 
   const currentLangObj = supportedLanguages.find((l) => l.code === language) || supportedLanguages[0];
+
+  const renderVerificationBadge = (item: FinanceNewsItem) => {
+    const status = item.verificationStatus || (item.isVerified ? 'VERIFIED' : 'UNVERIFIED');
+    switch (status) {
+      case 'VERIFIED':
+        return (
+          <span className="inline-flex items-center text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md font-bold border border-emerald-300 shadow-2xs">
+            <ShieldCheck className="w-3 h-3 mr-1 text-emerald-600" />
+            OFFICIAL PRIMARY SOURCE — VERIFIED
+          </span>
+        );
+      case 'PARTIALLY_VERIFIED':
+        return (
+          <span className="inline-flex items-center text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md font-bold border border-amber-300">
+            <AlertTriangle className="w-3 h-3 mr-1 text-amber-600" />
+            PARTIALLY VERIFIED
+          </span>
+        );
+      case 'OUTDATED':
+        return (
+          <span className="inline-flex items-center text-[10px] text-orange-800 bg-orange-50 px-2 py-0.5 rounded-md font-bold border border-orange-300">
+            <Clock className="w-3 h-3 mr-1 text-orange-600" />
+            OUTDATED SOURCE
+          </span>
+        );
+      case 'FAILED':
+        return (
+          <span className="inline-flex items-center text-[10px] text-rose-800 bg-rose-50 px-2 py-0.5 rounded-md font-bold border border-rose-300">
+            <ShieldAlert className="w-3 h-3 mr-1 text-rose-600" />
+            VERIFICATION FAILED
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center text-[10px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md font-bold border border-slate-300">
+            <HelpCircle className="w-3 h-3 mr-1 text-slate-500" />
+            UNVERIFIED
+          </span>
+        );
+    }
+  };
 
   // If viewing or editing a detailed article, show Article Reader
   if (activeArticle) {
@@ -223,7 +267,7 @@ export const FinanceNewsView: React.FC = () => {
                 activeCategory === 'all' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'hover:text-slate-900'
               }`}
             >
-              All (20)
+              All ({newsList.length})
             </button>
             <button
               type="button"
@@ -232,7 +276,7 @@ export const FinanceNewsView: React.FC = () => {
                 activeCategory === 'national' ? 'bg-white text-amber-900 shadow-2xs font-bold' : 'hover:text-slate-900'
               }`}
             >
-              National (10)
+              National ({nationalNews.length} Active Verified)
             </button>
             <button
               type="button"
@@ -241,7 +285,7 @@ export const FinanceNewsView: React.FC = () => {
                 activeCategory === 'international' ? 'bg-white text-indigo-900 shadow-2xs font-bold' : 'hover:text-slate-900'
               }`}
             >
-              International (10)
+              International ({internationalNews.length} Active Verified)
             </button>
           </div>
         )}
@@ -261,7 +305,7 @@ export const FinanceNewsView: React.FC = () => {
                   activeCategory === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
                 }`}
               >
-                All (20)
+                All ({newsList.length})
               </button>
               <button
                 type="button"
@@ -270,7 +314,7 @@ export const FinanceNewsView: React.FC = () => {
                   activeCategory === 'national' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-900'
                 }`}
               >
-                National Finance (10)
+                National ({nationalNews.length})
               </button>
               <button
                 type="button"
@@ -279,7 +323,7 @@ export const FinanceNewsView: React.FC = () => {
                   activeCategory === 'international' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-900'
                 }`}
               >
-                International Finance (10)
+                International ({internationalNews.length})
               </button>
             </div>
 
@@ -372,13 +416,13 @@ export const FinanceNewsView: React.FC = () => {
 
                           <span className="text-[11px] text-slate-400">•</span>
                           <span className="text-[11px] text-slate-500 font-medium">
-                            {item.source.publishedDate || 'Recent'}
+                            {item.source.publishedDate || 'Recent'} ({new Date(item.publishedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
                           </span>
                         </div>
 
                         {/* Importance Score Pill */}
                         <div
-                          className={`flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                          className={`flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
                             item.importanceScore >= 9
                               ? 'bg-rose-100 text-rose-800 border border-rose-200'
                               : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
@@ -391,14 +435,25 @@ export const FinanceNewsView: React.FC = () => {
                       </div>
 
                       {/* Source & Verification Tag */}
-                      <div className="flex items-center space-x-2 text-xs text-slate-500">
-                        <span className="font-bold text-slate-800">{item.source.name}</span>
-                        {item.isVerified && (
-                          <span className="inline-flex items-center text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-medium border border-emerald-200">
-                            <ShieldCheck className="w-3 h-3 mr-0.5" />
-                            Official Primary Source
-                          </span>
-                        )}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                        <div className="flex items-center space-x-1.5 text-xs">
+                          {item.source.url ? (
+                            <a
+                              href={item.source.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-bold text-slate-800 hover:text-emerald-700 hover:underline inline-flex items-center space-x-1"
+                              title="Visit official source website"
+                            >
+                              <span>{item.source.name}</span>
+                              <ExternalLink className="w-3 h-3 text-emerald-600" />
+                            </a>
+                          ) : (
+                            <span className="font-bold text-slate-800">{item.source.name}</span>
+                          )}
+                        </div>
+
+                        {renderVerificationBadge(item)}
                       </div>
 
                       {/* Headline in currently selected language */}

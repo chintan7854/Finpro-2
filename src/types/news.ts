@@ -2,6 +2,8 @@ import { LanguageCode } from './index';
 
 export type FinanceNewsCategory = 'national' | 'international';
 
+export type VerificationStatus = 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED' | 'OUTDATED' | 'FAILED';
+
 export interface NewsSource {
   name: string;
   url?: string;
@@ -23,6 +25,10 @@ export interface FinanceNewsItem {
   tags: string[];
   keyMetrics?: string[];
   isVerified: boolean;
+  verificationStatus: VerificationStatus;
+  verificationEvidence?: string;
+  retrievedAt?: string;
+  verifiedAt?: string;
   verifiedBy: string;
   financialImpactAreas: string[];
   createdAt: string;

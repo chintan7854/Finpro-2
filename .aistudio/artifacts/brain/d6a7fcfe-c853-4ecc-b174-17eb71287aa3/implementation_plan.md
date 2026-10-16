@@ -1,177 +1,77 @@
-# FinAdvisor Pro — Multi-Profile Management, Image Cropping & Free AI Background Removal
+# Implementation Plan — Finance Pro News System Complete Upgrade
 
-Upgrade the existing Advisor Master Profile into a multi-profile management system with independent branding, canvas image cropping, permanently free client-side background removal, and app-wide active profile integration.
-
-### User Review & Critical Decisions
-
-> [!IMPORTANT]
-> - **Zero-Cost Background Removal**: Uses client-side `@imgly/background-removal` (ONNX Web / WebAssembly) running directly in the browser with an intelligent fallback canvas edge-segmentation engine. This requires **zero external API keys, zero paid credits, and runs permanently free**.
-> - **Non-Destructive Asset Pipeline**: Each profile maintains three distinct image states for user flexibility: Original Photo, Cropped Photo, and Background-Removed Photo (transparent PNG). Users can switch between "With Background" and "Without Background" at any time across all marketing and content generators.
-> - **App-Wide Backward Compatibility**: The existing `useAdvisor()` hook will continue to export `profile` representing the currently selected **active profile**, guaranteeing 100% backward compatibility with all existing marketing studios, flyer generators, business card creators, and finance news article builders.
+Comprehensive upgrade plan for the Finance Pro News module, reinforcing real-time fact checking, verified news catalog maintenance, dual-cycle automated scheduler, multi-language detailed article generation, full article copying & WhatsApp sharing, and bottom reader controls while preserving all existing application features.
 
 ---
 
-### 1. Overview & Core Concept
+### 1. Architectural Inspection & Current Baseline
 
-- **What It Does**: Enables financial advisors to maintain and switch between multiple distinct professional profiles (e.g., "Wealth Management & Mutual Funds", "Term & Health Insurance", "Corporate Advisory", "NRI Portfolio Planning") under a single account. Each profile possesses its own contact details, regulatory credentials (AMFI/ARN/RIA/NISM), brand color schemes, disclaimer texts, call-to-action buttons, high-resolution logos, and photos.
-- **Photo Studio**: Features an interactive visual crop editor with zoom, pan, rotate, and aspect ratio locks (1:1, 4:5, 3:4, Freeform) combined with an on-device, permanently free AI background remover yielding crisp transparent PNG portraits.
-- **Target Audience**: Financial advisors, wealth managers, AMFI mutual fund distributors, insurance advisors, and RIA consultants who operate under multiple business verticals or partner entities.
-- **Key Value**: Eliminates the tedious friction of continually re-typing details or swapping logos when generating mutual fund market insights versus insurance advisory collateral.
-
----
-
-### 2. User Experience & Visual Design
-
-#### Key User Flows
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       Advisor Master Profile Screen                         │
-│                                                                             │
-│  ┌─ Active Profile Selector ──────────────────────────────────────────────┐  │
-│  │ 👤 Chintan Raval — Mutual Funds (Default)  [ Switch ▼ ]  [ + New ]     │  │
-│  └────────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-│  ┌─ Profile Tabs / Management ────────────────────────────────────────────┐  │
-│  │ [ Overview ]  [ Identity & Contact ]  [ Visuals ]  [ Branding & Regs ] │  │
-│  └────────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-│  ┌─ Photo Studio ─────────────────────────────────────────────────────────┐  │
-│  │  ┌───────────────┐  [ ✂️ Crop & Reposition ]   ○ With Background        │  │
-│  │  │  Photo Card   │  [ ✨ Remove Background ]  ● Transparent BG (Active)│  │
-│  │  │  (Preview)    │  [ 🔄 Restore Original ]   [ 🗑️ Remove Photo ]       │  │
-│  │  └───────────────┘                                                     │  │
-│  └────────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-│  ┌─ Profile Actions ──────────────────────────────────────────────────────┐  │
-│  │ [ 💾 Save Profile ]   [ 📋 Duplicate ]   [ 👁️ Full Preview ]  [ 🗑️ Delete ] │  │
-│  └────────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-1. **Active Profile Selector**: Positioned prominently at the top of the profile screen and accessible via a compact switcher in the top navigation header. Shows the current profile with quick actions to switch, duplicate, or create a new profile.
-2. **Interactive Photo & Logo Studio**:
-   - **Upload & Crop Modal**: Touch-friendly canvas editor supporting smooth pinch/drag panning, slider zoom (100% to 300%), 90-degree rotations, aspect ratio presets (1:1 Square, 4:5 Portrait, 3:4, Free), rule-of-thirds grid overlay, and real-time circular/square mask preview.
-   - **AI Background Remover**: One-click client-side background removal with progress indicator, before/after toggle comparison, and transparent alpha checkerboard preview.
-   - **Background Mode Preference**: Allows setting profile-level default for generators ("With Background" vs "Without Background").
-3. **Multi-Profile Management Modal**:
-   - Card/list view of all profiles with active badge, default badge, creation date, and completion score.
-   - One-click actions: Make Default, Duplicate, Rename, Reset to Template, Delete (with safety confirmation modal and fallback protection).
-4. **App-Wide Dynamic Integration**:
-   - Flyer Studio, Story Generator, News Article Generator, and Business Card Studio automatically read the active profile's colors, logo, and transparent headshot.
-   - A quiet profile switcher pill in generator headers allows previewing the same graphic across different advisor identities instantly.
-
-#### Visual Styling & Layout
-- **Design System**: Strict Tailwind typography and subtle neutral borders (`border-slate-200 dark:border-slate-800`), avoiding AI slop cliches, unboxed metadata typography, and 60-30-10 color harmony.
-- **Touch Targets**: All mobile buttons $\ge 44\text{px}$, responsive modal drawers with safe-area padding for mobile viewports.
+- **News State & Data Engine**:
+  - `src/constants/financeNewsData.ts`: Holds initial verified National (10 items) and International (10 items) records with official sources (RBI, AMFI, MoSPI, CBDT, US Fed, OPEC, IMF, ECB, etc.).
+  - `src/types/news.ts`: Defines `FinanceNewsItem`, `FinanceNewsArticle`, `NewsNotification`, and `NewsSchedulerStatus`.
+- **Backend & Automation**:
+  - `server.ts` & `api/index.ts`: Dual-cycle scheduler registered with `node-cron` at `0 4 * * *` (Fetch) and `30 4 * * *` (Safe Pruning) with `Asia/Kolkata` timezone.
+  - Endpoints: `GET /api/news`, `GET /api/news/status`, `POST /api/news/refresh`, `POST /api/news/generate-article`, and `POST /api/news/custom-topic`.
+- **UI Components & Handlers**:
+  - `src/components/news/FinanceNewsView.tsx`: News dashboard with category tabs, search, impact filter, custom topic modal, and scheduler status modal.
+  - `src/components/news/FinanceArticleReader.tsx`: Article reader with inline editing, regenerate, save, copy, and WhatsApp sharing.
+  - `src/components/news/NewsNotificationBell.tsx`: Notification bell with unread counters and navigation to news items.
+  - `src/components/news/NewsSchedulerModal.tsx`: Real-time inspector for 4:00 AM / 4:30 AM cron jobs, live counts, and scheduler audit logs.
 
 ---
 
-### 3. Key Product Decisions & Trade-Offs
+### 2. Required Upgrades & Gaps Identified
 
-- **Client-Side AI Background Removal vs. Cloud APIs**:
-  - *Chosen Approach*: On-device processing using `@imgly/background-removal` (ONNX / WebAssembly) with canvas color-thresholding fallback.
-  - *Why*: Provides **100% permanently free, unlimited background removal** with zero recurring API costs, no quota exhaustion, no external network dependencies, and complete data privacy (advisor photos never leave their device).
-- **Relational Multi-Profile Storage Architecture**:
-  - *Chosen Approach*: Maintain an array of `AdvisorProfile` objects (`profiles: AdvisorProfile[]`) coupled with `activeProfileId: string` and `defaultProfileId: string` stored in `localStorage` with cloud-sync readiness in `AdvisorContext`.
-  - *Why*: Provides atomic profile switching, lightning-fast rendering without remote latency, offline capability, and instant compatibility with existing profile consumption across the application.
-- **Canvas-Based Non-Destructive Image Processing**:
-  - *Chosen Approach*: Keep the base64 / blob URLs for `originalPhotoUrl`, `croppedPhotoUrl`, and `bgRemovedPhotoUrl` in the profile state.
-  - *Why*: Allows advisors to freely revert crops or toggle background transparency without having to re-upload their original high-resolution photo.
+1. **Fact-Checking & Verification Status Support**:
+   - Extend `FinanceNewsItem` in `src/types/news.ts` to include standardized `VerificationStatus`: `'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED' | 'OUTDATED' | 'FAILED'`.
+   - Store retrieval & verification timestamps (`verifiedAt`, `retrievedAt`), source URLs, evidence notes, and publisher types.
+   - Display prominent verification badges with distinct colors, official primary source indicators, and exact publication/event dates on news cards.
+
+2. **Full Article Copying & WhatsApp Sharing**:
+   - Ensure `handleCopyText` copies the entire comprehensive article including Headline, Verified Facts, Context, Why It Matters, All 9 Financial Impacts, Advisor Perspective, Practical Takeaways, Common Mistakes, Future Scenarios, Conclusion, and Active Advisor Credentials with Disclaimers.
+   - Upgrade WhatsApp sharing to support complete formatted advisory briefs (using WhatsApp markdown formatting: `*bold*`, `_italic_`, `•` bullets) without lossy truncation, with fallback to clipboard if message exceeds URL limits. Avoid `window.open` per environment constraints.
+
+3. **Working Bottom Controls on Article Reader**:
+   - Add a sticky/docked or prominent bottom action toolbar on `FinanceArticleReader.tsx`:
+     - "Back to News Dashboard"
+     - "Save Article" / "Saved in Library"
+     - "Edit Article" / "Save Changes"
+     - "Regenerate Analysis"
+     - "Copy Full Article"
+     - "Share to WhatsApp" (Complete Brief)
+     - "Scroll to Top" smooth navigation
+     - "Delete Article" (if saved)
+
+4. **Detailed Article Generator Depth & 9 Financial Impacts**:
+   - Verify that all 9 financial impacts are fully articulated across both AI generation prompts and local high-fidelity generator:
+     1. Household Expenses
+     2. Inflation
+     3. Savings & Bank FDs
+     4. Loans & EMIs
+     5. Taxes & Deductions
+     6. Insurance (Term & Health)
+     7. SIPs & Mutual Funds
+     8. Stock Markets
+     9. Gold & Commodities
+   - Map both modern (`fullName`, `mobile`, `amfiArn`, `croppedPhotoUrl`) and legacy (`advisorName`, `phoneNumber`, `professionalDetails`, `profilePhoto`) advisor profile properties so active profile data is always 100% complete.
+
+5. **Scheduler & Automation Safeguards**:
+   - Preserve 10 active National and 10 active International verified news items.
+   - Maintain strict safe-cleanup guard: never prune more old items than successfully added new items, and skip cleanup if 4:00 AM addition fails.
+   - Retain full audit logs and timezone verification.
 
 ---
 
-### 4. Technical Architecture & Data Strategy
+### 3. Implementation Steps
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            AdvisorContext                                   │
-│  - profiles: AdvisorProfile[]                                               │
-│  - activeProfileId: string                                                  │
-│  - defaultProfileId: string                                                 │
-│  - activeProfile: AdvisorProfile (derived/getter)                           │
-│  - Actions: createProfile(), switchProfile(), updateProfile(),              │
-│             duplicateProfile(), deleteProfile(), setDefaultProfile()        │
-└──────────────────────┬──────────────────────────────────────────────────────┘
-                       │
-       ┌───────────────┼──────────────────────────────┐
-       ▼               ▼                              ▼
-┌──────────────┐┌──────────────┐               ┌──────────────┐
-│ ProfileView  ││ ImageCropper │               │ BgRemoval    │
-│ & Switcher   ││ Modal (Canvas│               │ Engine       │
-│ UI           ││ & Transforms)│               │ (@imgly + FB)│
-└──────────────┘└──────────────┘               └──────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       Consuming Modules (Unchanged API)                     │
-│  - MarketUpdatesView / FlyerStudio / StoryGenerator / BusinessCardView      │
-│  - News Article Generator (`/api/generate-news-article`)                    │
-│  - Business Card & Social Share Graphics                                    │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-#### Extended `AdvisorProfile` Data Model
-```typescript
-export interface AdvisorProfile {
-  id: string; // unique UUID
-  profileName: string; // e.g. "Main Profile", "Mutual Funds", "Insurance"
-  isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
-
-  // Identity
-  fullName: string;
-  designation: string;
-  qualifications: string;
-  achievements: string;
-
-  // Visual Assets
-  originalPhotoUrl?: string;
-  croppedPhotoUrl?: string;
-  bgRemovedPhotoUrl?: string;
-  activePhotoVariant: 'original' | 'cropped' | 'bgRemoved';
-  useBackgroundRemoved: boolean; // toggle for graphics
-  
-  originalLogoUrl?: string;
-  croppedLogoUrl?: string;
-  activeLogoVariant: 'original' | 'cropped';
-
-  // Contact Details
-  countryCode: string;
-  mobile: string;
-  whatsapp: string;
-  email: string;
-  city: string;
-  state: string;
-  officeAddress: string;
-  website: string;
-
-  // Professional & Regulatory
-  amfiArn: string;
-  euin: string;
-  riaNumber: string;
-  irdaNumber: string;
-  nismCertifications: string;
-
-  // Branding & Preferences
-  primaryColor: string;
-  secondaryColor: string;
-  ctaText: string;
-  disclaimer: string;
-  socialLinks: {
-    linkedin?: string;
-    twitter?: string;
-    facebook?: string;
-    instagram?: string;
-    youtube?: string;
-  };
-}
-```
-
-#### Testing & Verification Plan
-1. **Multi-Profile Operations**: Create 3 profiles, switch between them, duplicate one, verify state isolation, test deletion protection for default profile.
-2. **Crop & Transform Tool**: Test upload, zoom, pan, rotate, aspect ratio toggling, canvas render quality, and cancel/save behavior.
-3. **Background Removal**: Test client-side `@imgly/background-removal` execution, progress indicator, transparent PNG generation, and instant switching between With Background and Without Background.
-4. **App-Wide Consistency**: Verify that updating branding or switching profiles instantly reflects across Flyer Studio, Finance News Article Generator, Business Card Preview, and Social Post generators without page reloads.
-5. **Compilation & Build**: Run `lint_applet` and `compile_applet` to confirm zero TypeScript and bundling errors.
+- **Step 1**: Update `src/types/news.ts` with `VerificationStatus` and verification metadata fields.
+- **Step 2**: Enhance `src/constants/financeNewsData.ts` with `verificationStatus: 'VERIFIED'`, verified timestamps, and primary source attributes.
+- **Step 3**: Update `src/services/financeNewsService.ts` local high-fidelity generator and helpers to support all 9 impact breakdowns, multi-language phrasing, and complete advisor profile binding.
+- **Step 4**: Upgrade `FinanceArticleReader.tsx` with:
+  - Full article clipboard copying (comprehensive formatting with all 9 impacts and scenarios)
+  - Full WhatsApp sharing with options for Complete Brief and Executive Summary
+  - Prominent bottom controls bar (Back, Save, Edit, Regenerate, Copy, WhatsApp, Scroll to Top)
+  - Enhanced in-place editing for content sections
+- **Step 5**: Upgrade `FinanceNewsView.tsx` with verification status badges, source links, publication/event dates, and active count indicators.
+- **Step 6**: Update `server.ts` and `api/index.ts` to ensure consistency of news endpoints and scheduler logs with new verification status fields.
+- **Step 7**: Compile and lint the applet to verify zero TypeScript errors or regressions.
