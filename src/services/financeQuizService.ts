@@ -15,6 +15,7 @@ import {
   validateOptionsDistinctness,
   buildDeterministicVerifiedQuestion,
 } from '../utils/financeMathEngine';
+import { getActiveAiPreferences } from '../context/AiEngineContext';
 
 const QUIZ_STORAGE_KEY = 'finadvisor_saved_quiz_records_v1';
 
@@ -131,6 +132,7 @@ export async function generateNewAiQuiz(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      const aiPref = getActiveAiPreferences();
       const res = await fetch('/api/generate-quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,6 +149,9 @@ export async function generateNewAiQuiz(
           questionCount: 1,
           language,
           clientName,
+          aiProvider: aiPref.provider,
+          openaiModel: aiPref.openaiModel,
+          geminiModel: aiPref.geminiModel,
           advisorProfile: advisorProfile
             ? {
                 advisorName: advisorProfile.advisorName,

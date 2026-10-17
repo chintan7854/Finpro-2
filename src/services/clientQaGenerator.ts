@@ -1,4 +1,5 @@
 import { LanguageCode, AdvisorProfile } from '../types';
+import { getActiveAiPreferences } from '../context/AiEngineContext';
 
 export interface ClientQaRequest {
   customerName: string;
@@ -83,6 +84,7 @@ export async function generateClientQaAnswer(request: ClientQaRequest): Promise<
 
   // 2. Try Backend AI Endpoint
   try {
+    const aiPref = getActiveAiPreferences();
     const res = await fetch('/api/generate-client-qa', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -90,6 +92,9 @@ export async function generateClientQaAnswer(request: ClientQaRequest): Promise<
         customerName,
         customerQuestion,
         language,
+        aiProvider: aiPref.provider,
+        openaiModel: aiPref.openaiModel,
+        geminiModel: aiPref.geminiModel,
         advisorProfile: {
           advisorName: advisorProfile.advisorName,
           designation: advisorProfile.designation,

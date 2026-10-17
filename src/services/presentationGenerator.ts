@@ -9,6 +9,7 @@ import {
 import { PRESENTATION_SUBJECTS_LIST } from '../constants/presentationSubjects';
 
 import { AdvisorBusinessProfile } from '../constants/advisorSectorsData';
+import { getActiveAiPreferences } from '../context/AiEngineContext';
 
 export interface GeneratePresentationRequest {
   topicPrompt?: string;
@@ -187,6 +188,7 @@ export async function generateClientPresentation(
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => controller.abort(), 50000) : null;
 
+    const aiPref = getActiveAiPreferences();
     const response = await fetch('/api/generate-presentation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -198,6 +200,9 @@ export async function generateClientPresentation(
         subCategoryTitle,
         mode,
         language,
+        aiProvider: aiPref.provider,
+        openaiModel: aiPref.openaiModel,
+        geminiModel: aiPref.geminiModel,
         clientName: clientName?.trim() || questionnaire.clientName?.trim() || undefined,
         businessProfile,
         historicalScenarioMode: questionnaire.historicalScenarioMode || 'standard',
@@ -898,6 +903,7 @@ export async function regenerateSlide(params: {
   const { presentation, slide, refinementPrompt, advisorProfile } = params;
 
   try {
+    const aiPref = getActiveAiPreferences();
     const response = await fetch('/api/regenerate-slide', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -907,6 +913,9 @@ export async function regenerateSlide(params: {
         slideNumber: slide.slideNumber,
         slideType: slide.slideType,
         language: presentation.language,
+        aiProvider: aiPref.provider,
+        openaiModel: aiPref.openaiModel,
+        geminiModel: aiPref.geminiModel,
         clientProfile: presentation.questionnaireSnapshot?.clientProfile || 'Retail / HNI Client',
         refinementPrompt: refinementPrompt || 'Make this slide sharper, more client-friendly, and data-accurate',
         advisorProfile: {

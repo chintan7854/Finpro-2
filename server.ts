@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 import {
   validateQuestionAccuracy,
   validateOptionsDistinctness,
@@ -29,6 +30,12 @@ function getGeminiClient(apiKey?: string) {
   });
 }
 
+function getOpenAIClient(apiKey?: string) {
+  const key = apiKey || process.env.OPENAI_API_KEY;
+  if (!key || key === 'MY_OPENAI_API_KEY') return null;
+  return new OpenAI({ apiKey: key });
+}
+
 // Multi-model cascading executor for 100% reliable generation without 503 drops
 function cleanJsonText(raw: string): string {
   let cleaned = (raw || '').trim();
@@ -40,8 +47,8 @@ function cleanJsonText(raw: string): string {
   return cleaned.trim();
 }
 
-async function generateContentWithFallback(ai: GoogleGenAI, prompt: string, config: any) {
-  const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+async function generateContentWithFallback(ai: GoogleGenAI, prompt: string, config: any, preferredModel?: string) {
+  const models = Array.from(new Set([preferredModel || 'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-flash-latest']));
   let lastError: any = null;
 
   for (const model of models) {
@@ -52,7 +59,7 @@ async function generateContentWithFallback(ai: GoogleGenAI, prompt: string, conf
         config,
       });
       if (response && response.text) {
-        return response.text;
+        return { text: response.text, model };
       }
     } catch (err: any) {
       console.warn(`Model ${model} encountered transient issue:`, err?.message || err);
@@ -63,13 +70,172 @@ async function generateContentWithFallback(ai: GoogleGenAI, prompt: string, conf
   throw lastError || new Error('All candidate models failed to generate content.');
 }
 
+// Unified Dual-Engine (Gemini + OpenAI) with intelligent fallback
+interface UnifiedAiOptions {
+  prompt: string;
+  systemInstruction?: string;
+  aiProvider?: 'gemini' | 'openai' | 'auto';
+  openaiModel?: string;
+  geminiModel?: string;
+  responseMimeType?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+}
+
+interface UnifiedAiResult {
+  text: string;
+  providerUsed: 'gemini' | 'openai';
+  modelUsed: string;
+  fallbackUsed?: boolean;
+}
+
+async function generateUnifiedAiContent(options: UnifiedAiOptions): Promise<UnifiedAiResult> {
+  const {
+    prompt,
+    systemInstruction,
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
+    responseMimeType,
+    temperature = 0.7,
+    maxOutputTokens = 3500,
+  } = options;
+
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
+
+  const tryOpenAIFirst = aiProvider === 'openai' || (aiProvider === 'auto' && hasOpenAI && !hasGemini);
+
+  // 1. Try OpenAI if requested
+  if (tryOpenAIFirst && hasOpenAI) {
+    try {
+      const openai = getOpenAIClient()!;
+      const messages: any[] = [];
+      if (systemInstruction) {
+        messages.push({ role: 'system', content: systemInstruction });
+      }
+      messages.push({ role: 'user', content: prompt });
+
+      const targetModel = openaiModel === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o-mini';
+      const completion = await openai.chat.completions.create({
+        model: targetModel,
+        messages,
+        temperature,
+        max_tokens: maxOutputTokens,
+        response_format: responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
+      });
+
+      const text = completion.choices[0]?.message?.content || '';
+      if (text) {
+        return {
+          text,
+          providerUsed: 'openai',
+          modelUsed: targetModel,
+        };
+      }
+    } catch (openAiErr: any) {
+      console.warn('OpenAI generation error, checking fallback:', openAiErr?.message || openAiErr);
+      if (!hasGemini) throw openAiErr;
+    }
+  }
+
+  // 2. Try Gemini
+  if (hasGemini) {
+    try {
+      const ai = getGeminiClient();
+      const config: any = {
+        temperature,
+        maxOutputTokens,
+      };
+      if (responseMimeType) {
+        config.responseMimeType = responseMimeType;
+      }
+      if (systemInstruction) {
+        config.systemInstruction = systemInstruction;
+      }
+
+      const res = await generateContentWithFallback(ai, prompt, config, geminiModel);
+      return {
+        text: res.text,
+        providerUsed: 'gemini',
+        modelUsed: res.model,
+        fallbackUsed: tryOpenAIFirst,
+      };
+    } catch (geminiErr: any) {
+      console.warn('Gemini generation error, checking secondary:', geminiErr?.message || geminiErr);
+      if (!hasOpenAI || tryOpenAIFirst) throw geminiErr;
+    }
+  }
+
+  // 3. Fallback to OpenAI if Gemini failed
+  if (hasOpenAI && !tryOpenAIFirst) {
+    try {
+      const openai = getOpenAIClient()!;
+      const messages: any[] = [];
+      if (systemInstruction) {
+        messages.push({ role: 'system', content: systemInstruction });
+      }
+      messages.push({ role: 'user', content: prompt });
+
+      const targetModel = openaiModel === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o-mini';
+      const completion = await openai.chat.completions.create({
+        model: targetModel,
+        messages,
+        temperature,
+        max_tokens: maxOutputTokens,
+        response_format: responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
+      });
+
+      const text = completion.choices[0]?.message?.content || '';
+      if (text) {
+        return {
+          text,
+          providerUsed: 'openai',
+          modelUsed: targetModel,
+          fallbackUsed: true,
+        };
+      }
+    } catch (openAiErr: any) {
+      throw openAiErr;
+    }
+  }
+
+  throw new Error('Neither Gemini nor OpenAI is configured with a valid API key on the server.');
+}
+
 // Health and AI status check endpoint
 app.get('/api/health', (req, res) => {
-  const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
   res.json({
     status: 'ok',
-    aiConfigured: hasGeminiKey,
-    timestamp: new Date().toISOString()
+    aiConfigured: hasGemini || hasOpenAI,
+    geminiConfigured: hasGemini,
+    openaiConfigured: hasOpenAI,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/api/ai-config', (req, res) => {
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
+  res.json({
+    status: 'ok',
+    providers: {
+      gemini: {
+        available: hasGemini,
+        name: 'Google Gemini',
+        models: ['gemini-3.8-flash', 'gemini-2.5-flash'],
+        defaultModel: 'gemini-3.8-flash',
+      },
+      openai: {
+        available: hasOpenAI,
+        name: 'OpenAI',
+        models: ['gpt-4o-mini', 'gpt-4o'],
+        defaultModel: 'gpt-4o-mini',
+      },
+    },
+    defaultProvider: hasGemini ? 'gemini' : hasOpenAI ? 'openai' : 'none',
   });
 });
 
@@ -255,19 +421,26 @@ app.post('/api/news/refresh', async (req, res) => {
 
 // POST /api/news/generate-article
 app.post('/api/news/generate-article', async (req, res) => {
-  const { newsItem, newsId, language = 'en', advisorProfile = {} } = req.body;
+  const {
+    newsItem,
+    newsId,
+    language = 'en',
+    advisorProfile = {},
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
+  } = req.body;
   const targetNews = newsItem || activeNewsCatalog.find((n) => n.id === newsId);
 
   if (!targetNews) {
     return res.status(400).json({ success: false, error: 'News item not found' });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
 
-  if (isKeyValid) {
+  if (hasGemini || hasOpenAI) {
     try {
-      const ai = getGeminiClient();
       const localizedHeadline = targetNews.headline[language] || targetNews.originalHeadline;
       const localizedSummary = targetNews.summary[language] || targetNews.originalSummary;
 
@@ -322,12 +495,16 @@ Output ONLY valid JSON matching this schema:
 
 Never invent fake credentials, quotes, or guarantee returns. Clearly distinguish verified facts from advisor opinions.`;
 
-      const responseText = await generateContentWithFallback(ai, prompt, {
+      const aiResult = await generateUnifiedAiContent({
+        prompt,
+        aiProvider,
+        openaiModel,
+        geminiModel,
         temperature: 0.3,
         responseMimeType: 'application/json',
       });
 
-      const parsed = JSON.parse(cleanJsonText(responseText));
+      const parsed = JSON.parse(cleanJsonText(aiResult.text));
 
       const article = {
         id: `art_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -366,9 +543,14 @@ Never invent fake credentials, quotes, or guarantee returns. Clearly distinguish
         isEdited: false,
       };
 
-      return res.json({ success: true, article });
+      return res.json({
+        success: true,
+        article,
+        aiProviderUsed: aiResult.providerUsed,
+        aiModelUsed: aiResult.modelUsed,
+      });
     } catch (err: any) {
-      console.warn('Gemini article generation failed, falling back:', err?.message || err);
+      console.warn('AI article generation failed, falling back:', err?.message || err);
     }
   }
 
@@ -381,17 +563,23 @@ Never invent fake credentials, quotes, or guarantee returns. Clearly distinguish
 
 // POST /api/news/custom-topic
 app.post('/api/news/custom-topic', async (req, res) => {
-  const { customTopic, language = 'en', advisorProfile = {} } = req.body;
+  const {
+    customTopic,
+    language = 'en',
+    advisorProfile = {},
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
+  } = req.body;
   if (!customTopic || !customTopic.trim()) {
     return res.status(400).json({ success: false, error: 'Custom topic is required' });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
 
-  if (isKeyValid) {
+  if (hasGemini || hasOpenAI) {
     try {
-      const ai = getGeminiClient();
       const prompt = `You are a certified Indian financial advisor and research economist.
 The user requested a custom financial article on: "${customTopic}".
 Language: "${language}".
@@ -439,12 +627,16 @@ Output ONLY valid JSON matching this schema:
   "conclusion": "actionable summary and conclusion in ${language}"
 }`;
 
-      const responseText = await generateContentWithFallback(ai, prompt, {
+      const aiResult = await generateUnifiedAiContent({
+        prompt,
+        aiProvider,
+        openaiModel,
+        geminiModel,
         temperature: 0.3,
         responseMimeType: 'application/json',
       });
 
-      const parsed = JSON.parse(cleanJsonText(responseText));
+      const parsed = JSON.parse(cleanJsonText(aiResult.text));
 
       const article = {
         id: `art_custom_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -489,9 +681,14 @@ Output ONLY valid JSON matching this schema:
         isEdited: false,
       };
 
-      return res.json({ success: true, article });
+      return res.json({
+        success: true,
+        article,
+        aiProviderUsed: aiResult.providerUsed,
+        aiModelUsed: aiResult.modelUsed,
+      });
     } catch (err: any) {
-      console.warn('Gemini custom topic article failed, falling back:', err?.message || err);
+      console.warn('AI custom topic article failed, falling back:', err?.message || err);
     }
   }
 
@@ -514,24 +711,25 @@ app.post('/api/generate-content', async (req, res) => {
     brandingSettings,
     useDefaultCta,
     useDefaultDisclaimer,
-    customCta
+    customCta,
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
   } = req.body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
 
-  if (!isKeyValid) {
+  if (!hasGemini && !hasOpenAI) {
     // Return flag so frontend seamlessly uses the high-fidelity built-in multilingual engine
     return res.json({
       success: false,
       useLocalEngine: true,
-      message: 'GEMINI_API_KEY is not configured on the server. Falling back to local generation engine.'
+      message: 'Neither GEMINI_API_KEY nor OPENAI_API_KEY is configured on the server. Falling back to local generation engine.'
     });
   }
 
   try {
-    const ai = getGeminiClient(apiKey);
-    
     const entropySeed = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
     const prompt = `
 You are a senior financial writer and certified financial planning educator in India.
@@ -587,20 +785,26 @@ You MUST return ONLY valid JSON matching this exact structure:
 }
 `;
 
-    const responseText = await generateContentWithFallback(ai, prompt, {
+    const aiResult = await generateUnifiedAiContent({
+      prompt,
+      aiProvider,
+      openaiModel,
+      geminiModel,
       responseMimeType: 'application/json',
       temperature: 0.85,
     });
 
-    const parsedData = JSON.parse(responseText);
+    const parsedData = JSON.parse(cleanJsonText(aiResult.text));
 
     return res.json({
       success: true,
       source: 'ai_api',
-      data: parsedData
+      data: parsedData,
+      aiProviderUsed: aiResult.providerUsed,
+      aiModelUsed: aiResult.modelUsed,
     });
   } catch (error: any) {
-    console.error('Gemini API Error:', error);
+    console.error('AI Generation API Error:', error);
     return res.json({
       success: false,
       useLocalEngine: true,
@@ -618,21 +822,23 @@ app.post('/api/generate-theme-poster', async (req, res) => {
     subjectId,
     contentLanguage,
     advisorProfile,
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
   } = req.body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
 
-  if (!isKeyValid) {
+  if (!hasGemini && !hasOpenAI) {
     return res.json({
       success: false,
       useLocalEngine: true,
-      message: 'GEMINI_API_KEY is not configured on server. Falling back to local theme engine.'
+      message: 'Neither GEMINI_API_KEY nor OPENAI_API_KEY is configured on server. Falling back to local theme engine.'
     });
   }
 
   try {
-    const ai = getGeminiClient(apiKey);
 
     const entropySeed = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
     const freshAngles = [
@@ -706,17 +912,23 @@ Return ONLY valid JSON matching:
 }
 `;
 
-    const responseText = await generateContentWithFallback(ai, prompt, {
+    const aiResult = await generateUnifiedAiContent({
+      prompt,
+      aiProvider,
+      openaiModel,
+      geminiModel,
       responseMimeType: 'application/json',
       temperature: 0.90,
     });
 
-    const parsedData = JSON.parse(responseText);
+    const parsedData = JSON.parse(cleanJsonText(aiResult.text));
 
     return res.json({
       success: true,
       source: 'ai_api',
-      data: parsedData
+      data: parsedData,
+      aiProviderUsed: aiResult.providerUsed,
+      aiModelUsed: aiResult.modelUsed,
     });
   } catch (error: any) {
     console.error('Theme Generator Error:', error);
@@ -730,21 +942,28 @@ Return ONLY valid JSON matching:
 
 // AI-Powered Client Q&A Advisory Assistant
 app.post('/api/generate-client-qa', async (req, res) => {
-  const { customerName, customerQuestion, language, advisorProfile } = req.body;
+  const {
+    customerName,
+    customerQuestion,
+    language,
+    advisorProfile,
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
+  } = req.body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
 
-  if (!isKeyValid) {
+  if (!hasGemini && !hasOpenAI) {
     return res.json({
       success: false,
       useLocalEngine: true,
-      message: 'GEMINI_API_KEY not configured. Falling back to local Q&A engine.',
+      message: 'Neither GEMINI_API_KEY nor OPENAI_API_KEY configured. Falling back to local Q&A engine.',
     });
   }
 
   try {
-    const ai = getGeminiClient(apiKey);
 
     const prompt = `
 You are an expert Certified Financial Planner (CFP) and personal financial educator in India.
@@ -785,17 +1004,23 @@ Return ONLY valid JSON matching:
 }
 `;
 
-    const responseText = await generateContentWithFallback(ai, prompt, {
+    const aiResult = await generateUnifiedAiContent({
+      prompt,
+      aiProvider,
+      openaiModel,
+      geminiModel,
       responseMimeType: 'application/json',
       temperature: 0.75,
     });
 
-    const parsedData = JSON.parse(responseText);
+    const parsedData = JSON.parse(cleanJsonText(aiResult.text));
 
     return res.json({
       success: true,
       source: 'ai_api',
       result: parsedData,
+      aiProviderUsed: aiResult.providerUsed,
+      aiModelUsed: aiResult.modelUsed,
     });
   } catch (error: any) {
     console.error('Client Q&A API Error:', error);
@@ -821,21 +1046,23 @@ app.post('/api/generate-story', async (req, res) => {
     ctaTitle,
     language,
     advisorProfile,
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
   } = req.body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
 
-  if (!isKeyValid) {
+  if (!hasGemini && !hasOpenAI) {
     return res.json({
       success: false,
       useLocalEngine: true,
-      message: 'GEMINI_API_KEY not configured. Falling back to local story engine.',
+      message: 'Neither GEMINI_API_KEY nor OPENAI_API_KEY configured. Falling back to local story engine.',
     });
   }
 
   try {
-    const ai = getGeminiClient(apiKey);
     const entropySeed = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
 
     const isDeepLength = lengthId === 'deep';
@@ -922,18 +1149,24 @@ You MUST return ONLY valid JSON matching this exact structure:
 }
 `;
 
-    const responseText = await generateContentWithFallback(ai, prompt, {
+    const aiResult = await generateUnifiedAiContent({
+      prompt,
+      aiProvider,
+      openaiModel,
+      geminiModel,
       responseMimeType: 'application/json',
       temperature: 0.8,
       maxOutputTokens: 8192,
     });
 
-    const parsedData = JSON.parse(responseText);
+    const parsedData = JSON.parse(cleanJsonText(aiResult.text));
 
     return res.json({
       success: true,
       source: 'ai_api',
       data: parsedData,
+      aiProviderUsed: aiResult.providerUsed,
+      aiModelUsed: aiResult.modelUsed,
     });
   } catch (error: any) {
     console.error('Story Generation API Error:', error);
@@ -960,21 +1193,23 @@ app.post('/api/generate-presentation', async (req, res) => {
     businessProfile,
     historicalScenarioMode,
     workflowType,
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
   } = req.body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
 
-  if (!isKeyValid) {
+  if (!hasGemini && !hasOpenAI) {
     return res.json({
       success: false,
       useLocalEngine: true,
-      message: 'GEMINI_API_KEY is not configured on the server. Falling back to local generation engine.'
+      message: 'Neither GEMINI_API_KEY nor OPENAI_API_KEY is configured on the server. Falling back to local generation engine.'
     });
   }
 
   try {
-    const ai = getGeminiClient(apiKey);
 
     const targetSlideCount = mode === 'quick' ? 6 : mode === 'detailed' ? 10 : 8;
     const langLabel = language === 'gu' ? 'Gujarati (ગુજરાતી)' : language === 'hi' ? 'Hindi (हिन्दी)' : 'English';
@@ -1077,13 +1312,17 @@ You MUST respond with valid JSON matching this exact structure:
 }
 Ensure each slide has valid rich elements (metrics, chartData, comparisonTable, risksAndLimitations, assumptions, or callToAction).`;
 
-    const responseText = await generateContentWithFallback(ai, prompt, {
+    const aiResult = await generateUnifiedAiContent({
+      prompt,
+      aiProvider,
+      openaiModel,
+      geminiModel,
       responseMimeType: 'application/json',
       temperature: 0.7,
       maxOutputTokens: 8192,
     });
 
-    const cleanedText = cleanJsonText(responseText);
+    const cleanedText = cleanJsonText(aiResult.text);
     const parsedData = JSON.parse(cleanedText);
 
     // Normalize slides for rock-solid frontend consumption
@@ -1175,21 +1414,23 @@ app.post('/api/regenerate-slide', async (req, res) => {
     clientProfile,
     refinementPrompt,
     advisorProfile,
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
   } = req.body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
 
-  if (!isKeyValid) {
+  if (!hasGemini && !hasOpenAI) {
     return res.json({
       success: false,
       useLocalEngine: true,
-      error: 'GEMINI_API_KEY is not configured on the server',
+      error: 'Neither GEMINI_API_KEY nor OPENAI_API_KEY is configured on the server',
     });
   }
 
   try {
-    const ai = getGeminiClient(apiKey);
     const langLabel = language === 'gu' ? 'Gujarati (ગુજરાતી)' : language === 'hi' ? 'Hindi (हिन्दी)' : 'English';
 
     const prompt = `You are a Senior Certified Financial Planner (CFP).
@@ -1229,19 +1470,25 @@ COMPLIANCE RULES:
   "assumptions": ["Key calculation baseline assumption"]
 }`;
 
-    const responseText = await generateContentWithFallback(ai, prompt, {
+    const aiResult = await generateUnifiedAiContent({
+      prompt,
+      aiProvider,
+      openaiModel,
+      geminiModel,
       responseMimeType: 'application/json',
       temperature: 0.75,
       maxOutputTokens: 3000,
     });
 
-    const cleanedText = cleanJsonText(responseText);
+    const cleanedText = cleanJsonText(aiResult.text);
     const parsedSlide = JSON.parse(cleanedText);
 
     return res.json({
       success: true,
       source: 'ai_api',
       data: parsedSlide,
+      aiProviderUsed: aiResult.providerUsed,
+      aiModelUsed: aiResult.modelUsed,
     });
   } catch (error: any) {
     console.error('Slide Regeneration API Error:', error);
@@ -1265,21 +1512,23 @@ app.post('/api/generate-quiz', async (req, res) => {
     clientName,
     advisorProfile,
     previousQuestions = [],
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
   } = req.body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
 
-  if (!isKeyValid) {
+  if (!hasGemini && !hasOpenAI) {
     return res.json({
       success: false,
       useLocalEngine: true,
-      message: 'GEMINI_API_KEY is not configured on the server. Falling back to local quiz bank.',
+      message: 'Neither GEMINI_API_KEY nor OPENAI_API_KEY is configured on the server. Falling back to local quiz bank.',
     });
   }
 
   try {
-    const ai = getGeminiClient(apiKey);
     const entropySeed = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
 
     const langInstructions: Record<string, string> = {
@@ -1369,12 +1618,16 @@ Return ONLY valid JSON matching this exact structure:
     // Multi-attempt verification loop with strict accuracy checks
     for (let attempt = 0; attempt < 2 && !verificationPassed; attempt++) {
       try {
-        const responseText = await generateContentWithFallback(ai, prompt, {
+        const aiResult = await generateUnifiedAiContent({
+          prompt,
+          aiProvider,
+          openaiModel,
+          geminiModel,
           responseMimeType: 'application/json',
           temperature: attempt === 0 ? 0.7 : 0.4,
         });
 
-        const cleanedText = cleanJsonText(responseText);
+        const cleanedText = cleanJsonText(aiResult.text);
         const candidate = JSON.parse(cleanedText);
 
         if (candidate?.questions && candidate.questions.length > 0) {
@@ -1463,12 +1716,15 @@ app.post('/api/generate-poll', async (req, res) => {
     clientName,
     advisorProfile,
     previousPollQuestions = [],
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
   } = req.body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyValid = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
 
-  if (!isKeyValid) {
+  if (!hasGemini && !hasOpenAI) {
     const fallbackPoll = buildDeterministicPoll({
       topicNum: topicNum || 1,
       topicId: topicId || 'personal_financial_planning',
@@ -1495,7 +1751,6 @@ app.post('/api/generate-poll', async (req, res) => {
   }
 
   try {
-    const ai = getGeminiClient(apiKey);
     const entropySeed = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
 
     const langInstructions: Record<string, string> = {
@@ -1572,12 +1827,16 @@ Return ONLY valid JSON matching this exact structure:
 
     for (let attempt = 0; attempt < 2 && !verificationPassed; attempt++) {
       try {
-        const responseText = await generateContentWithFallback(ai, prompt, {
+        const aiResult = await generateUnifiedAiContent({
+          prompt,
+          aiProvider,
+          openaiModel,
+          geminiModel,
           responseMimeType: 'application/json',
           temperature: isFactual ? 0.4 : 0.7,
         });
 
-        const cleanedText = cleanJsonText(responseText);
+        const cleanedText = cleanJsonText(aiResult.text);
         const candidate = JSON.parse(cleanedText);
 
         if (candidate?.questionText && Array.isArray(candidate?.options) && candidate.options.length >= 3) {

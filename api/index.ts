@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 export interface NewsItem {
   id: string;
   category: 'national' | 'international';
@@ -642,9 +643,15 @@ function cleanJsonText(raw: string): string {
   return cleaned.trim();
 }
 
+function getOpenAIClient(apiKey?: string) {
+  const key = apiKey || process.env.OPENAI_API_KEY;
+  if (!key || key === 'MY_OPENAI_API_KEY') return null;
+  return new OpenAI({ apiKey: key });
+}
+
 // Helper: Multi-model cascading executor for 100% reliable generation without 503 drops
-async function generateContentWithFallback(ai: GoogleGenAI, prompt: string, config: any) {
-  const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+async function generateContentWithFallback(ai: GoogleGenAI, prompt: string, config: any, preferredModel?: string): Promise<string> {
+  const models = Array.from(new Set([preferredModel || 'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-flash-latest']));
   let lastError: any = null;
 
   for (const model of models) {
@@ -663,6 +670,139 @@ async function generateContentWithFallback(ai: GoogleGenAI, prompt: string, conf
     }
   }
   throw lastError || new Error('All candidate models failed to generate content.');
+}
+
+// Unified Dual-Engine (Gemini + OpenAI) with intelligent fallback
+interface UnifiedAiOptions {
+  prompt: string;
+  systemInstruction?: string;
+  aiProvider?: 'gemini' | 'openai' | 'auto';
+  openaiModel?: string;
+  geminiModel?: string;
+  responseMimeType?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+}
+
+interface UnifiedAiResult {
+  text: string;
+  providerUsed: 'gemini' | 'openai';
+  modelUsed: string;
+  fallbackUsed?: boolean;
+}
+
+async function generateUnifiedAiContent(options: UnifiedAiOptions): Promise<UnifiedAiResult> {
+  const {
+    prompt,
+    systemInstruction,
+    aiProvider = 'gemini',
+    openaiModel = 'gpt-4o-mini',
+    geminiModel = 'gemini-3.8-flash',
+    responseMimeType,
+    temperature = 0.7,
+    maxOutputTokens = 3500,
+  } = options;
+
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
+
+  const tryOpenAIFirst = aiProvider === 'openai' || (aiProvider === 'auto' && hasOpenAI && !hasGemini);
+
+  // 1. Try OpenAI if requested
+  if (tryOpenAIFirst && hasOpenAI) {
+    try {
+      const openai = getOpenAIClient()!;
+      const messages: any[] = [];
+      if (systemInstruction) {
+        messages.push({ role: 'system', content: systemInstruction });
+      }
+      messages.push({ role: 'user', content: prompt });
+
+      const targetModel = openaiModel === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o-mini';
+      const completion = await openai.chat.completions.create({
+        model: targetModel,
+        messages,
+        temperature,
+        max_tokens: maxOutputTokens,
+        response_format: responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
+      });
+
+      const text = completion.choices[0]?.message?.content || '';
+      if (text) {
+        return {
+          text,
+          providerUsed: 'openai',
+          modelUsed: targetModel,
+        };
+      }
+    } catch (openAiErr: any) {
+      console.warn('OpenAI generation error, checking fallback:', openAiErr?.message || openAiErr);
+      if (!hasGemini) throw openAiErr;
+    }
+  }
+
+  // 2. Try Gemini
+  if (hasGemini) {
+    try {
+      const ai = getGeminiClient();
+      const config: any = {
+        temperature,
+        maxOutputTokens,
+      };
+      if (responseMimeType) {
+        config.responseMimeType = responseMimeType;
+      }
+      if (systemInstruction) {
+        config.systemInstruction = systemInstruction;
+      }
+
+      const text = await generateContentWithFallback(ai, prompt, config, geminiModel);
+      return {
+        text,
+        providerUsed: 'gemini',
+        modelUsed: geminiModel || 'gemini-3.8-flash',
+        fallbackUsed: tryOpenAIFirst,
+      };
+    } catch (geminiErr: any) {
+      console.warn('Gemini generation error, checking secondary:', geminiErr?.message || geminiErr);
+      if (!hasOpenAI || tryOpenAIFirst) throw geminiErr;
+    }
+  }
+
+  // 3. Fallback to OpenAI if Gemini failed
+  if (hasOpenAI && !tryOpenAIFirst) {
+    try {
+      const openai = getOpenAIClient()!;
+      const messages: any[] = [];
+      if (systemInstruction) {
+        messages.push({ role: 'system', content: systemInstruction });
+      }
+      messages.push({ role: 'user', content: prompt });
+
+      const targetModel = openaiModel === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o-mini';
+      const completion = await openai.chat.completions.create({
+        model: targetModel,
+        messages,
+        temperature,
+        max_tokens: maxOutputTokens,
+        response_format: responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
+      });
+
+      const text = completion.choices[0]?.message?.content || '';
+      if (text) {
+        return {
+          text,
+          providerUsed: 'openai',
+          modelUsed: targetModel,
+          fallbackUsed: true,
+        };
+      }
+    } catch (openAiErr: any) {
+      throw openAiErr;
+    }
+  }
+
+  throw new Error('Neither Gemini nor OpenAI is configured with a valid API key on the server.');
 }
 
 // Validation helpers for quizzes
@@ -837,11 +977,60 @@ app.get('/api', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
   res.json({
     status: 'ok',
-    aiConfigured: hasGeminiKey,
+    aiConfigured: hasGemini || hasOpenAI,
+    geminiConfigured: hasGemini,
+    openaiConfigured: hasOpenAI,
     timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/api/ai-config', (req, res) => {
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
+  res.json({
+    status: 'ok',
+    providers: {
+      gemini: {
+        available: hasGemini,
+        name: 'Google Gemini',
+        models: ['gemini-3.8-flash', 'gemini-2.5-flash'],
+        defaultModel: 'gemini-3.8-flash',
+      },
+      openai: {
+        available: hasOpenAI,
+        name: 'OpenAI',
+        models: ['gpt-4o-mini', 'gpt-4o'],
+        defaultModel: 'gpt-4o-mini',
+      },
+    },
+    defaultProvider: hasGemini ? 'gemini' : hasOpenAI ? 'openai' : 'none',
+  });
+});
+
+app.get('/api/ai-config', (req, res) => {
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY');
+  res.json({
+    status: 'ok',
+    providers: {
+      gemini: {
+        available: hasGemini,
+        name: 'Google Gemini',
+        models: ['gemini-3.8-flash', 'gemini-2.5-flash'],
+        defaultModel: 'gemini-3.8-flash',
+      },
+      openai: {
+        available: hasOpenAI,
+        name: 'OpenAI',
+        models: ['gpt-4o-mini', 'gpt-4o'],
+        defaultModel: 'gpt-4o-mini',
+      },
+    },
+    defaultProvider: hasGemini ? 'gemini' : hasOpenAI ? 'openai' : 'none',
   });
 });
 

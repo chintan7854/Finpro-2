@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { renderThemePosterToCanvas } from '../utils/themePosterRenderer';
 import { downloadCanvasAsPng } from '../utils/downloadHelper';
+import { getActiveAiPreferences } from '../context/AiEngineContext';
 import { VideoStatusMaker } from './VideoStatusMaker';
 import {
   Sparkles,
@@ -153,6 +154,7 @@ export const ThemePostersStudio: React.FC<ThemePostersStudioProps> = ({
     setBackgroundSeed((prev) => prev + Math.floor(Math.random() * 500) + 1);
 
     try {
+      const aiPref = getActiveAiPreferences();
       const response = await fetch('/api/generate-theme-poster', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -163,6 +165,9 @@ export const ThemePostersStudio: React.FC<ThemePostersStudioProps> = ({
           subjectTitle: activeSubjectTitle,
           contentLanguage: contentLanguage,
           variationSeed: nextSeed,
+          aiProvider: aiPref.provider,
+          openaiModel: aiPref.openaiModel,
+          geminiModel: aiPref.geminiModel,
           advisorProfile: {
             advisorName,
             designation: advisorDesignation,

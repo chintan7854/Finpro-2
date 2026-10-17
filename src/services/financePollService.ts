@@ -18,6 +18,7 @@ import {
 } from '../utils/financePollEngine';
 import { validateOptionsDistinctness } from '../utils/financeMathEngine';
 import { POLL_CATEGORIES, POLL_TYPES } from '../constants/financePollTopics';
+import { getActiveAiPreferences } from '../context/AiEngineContext';
 
 export interface GeneratePollParams {
   topic: FinancePollTopic;
@@ -118,10 +119,16 @@ export async function generatePoll(params: GeneratePollParams): Promise<Generate
     : categoryMeta.name;
 
   try {
+    const aiPref = getActiveAiPreferences();
     const res = await fetch('/api/generate-poll', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestPayload),
+      body: JSON.stringify({
+        ...requestPayload,
+        aiProvider: aiPref.provider,
+        openaiModel: aiPref.openaiModel,
+        geminiModel: aiPref.geminiModel,
+      }),
     });
 
     if (res.ok) {

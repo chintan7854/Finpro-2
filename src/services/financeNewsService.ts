@@ -7,6 +7,7 @@ import {
 } from '../types/news';
 import { AdvisorProfile, LanguageCode } from '../types';
 import { INITIAL_VERIFIED_NEWS } from '../constants/financeNewsData';
+import { getActiveAiPreferences } from '../context/AiEngineContext';
 
 const SAVED_ARTICLES_KEY = 'finadvisor_saved_news_articles';
 const NOTIFICATIONS_KEY = 'finadvisor_news_notifications';
@@ -79,10 +80,26 @@ export async function requestGenerateDetailedArticle(params: {
 
   // 1. Try server API
   try {
+    const aiPref = getActiveAiPreferences();
     const endpoint = customTopic ? '/api/news/custom-topic' : '/api/news/generate-article';
     const body = customTopic
-      ? { customTopic, language, advisorProfile }
-      : { newsId: newsItem?.id, newsItem, language, advisorProfile };
+      ? {
+          customTopic,
+          language,
+          advisorProfile,
+          aiProvider: aiPref.provider,
+          openaiModel: aiPref.openaiModel,
+          geminiModel: aiPref.geminiModel,
+        }
+      : {
+          newsId: newsItem?.id,
+          newsItem,
+          language,
+          advisorProfile,
+          aiProvider: aiPref.provider,
+          openaiModel: aiPref.openaiModel,
+          geminiModel: aiPref.geminiModel,
+        };
 
     const response = await fetch(endpoint, {
       method: 'POST',

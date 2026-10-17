@@ -27,6 +27,7 @@ import { FinanceQuizView } from './components/financeQuiz/FinanceQuizView';
 import { FinancePollView } from './components/financePoll/FinancePollView';
 import { FinanceNewsView } from './components/news/FinanceNewsView';
 import { FinanceNewsProvider } from './context/FinanceNewsContext';
+import { AiEngineProvider } from './context/AiEngineContext';
 import { FinancialSubjectId, GeneratedContent } from './types';
 
 function MainApp() {
@@ -189,13 +190,15 @@ export default function App() {
   return (
     <I18nProvider>
       <AdvisorProvider>
-        <ClientCrmProvider>
-          <LeadGenProvider>
-            <FinanceNewsProvider>
-              <MainApp />
-            </FinanceNewsProvider>
-          </LeadGenProvider>
-        </ClientCrmProvider>
+        <AiEngineProvider>
+          <ClientCrmProvider>
+            <LeadGenProvider>
+              <FinanceNewsProvider>
+                <MainApp />
+              </FinanceNewsProvider>
+            </LeadGenProvider>
+          </ClientCrmProvider>
+        </AiEngineProvider>
       </AdvisorProvider>
     </I18nProvider>
   );

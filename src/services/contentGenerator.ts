@@ -9,6 +9,7 @@ import {
   AdvisorSnapshot
 } from '../types';
 import { DEFAULT_CTAS, DEFAULT_DISCLAIMERS, FINANCIAL_SUBJECT_TITLES } from '../i18n/translations';
+import { getActiveAiPreferences } from '../context/AiEngineContext';
 
 interface GenerateOptions {
   subjectId: FinancialSubjectId;
@@ -82,6 +83,7 @@ export async function generateAdvisorContent(options: GenerateOptions): Promise<
 
   // 1. Try secure backend proxy endpoint
   try {
+    const aiPref = getActiveAiPreferences();
     const response = await fetch('/api/generate-content', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -101,7 +103,10 @@ export async function generateAdvisorContent(options: GenerateOptions): Promise<
         },
         useDefaultCta,
         useDefaultDisclaimer,
-        customCta
+        customCta,
+        aiProvider: aiPref.provider,
+        openaiModel: aiPref.openaiModel,
+        geminiModel: aiPref.geminiModel,
       })
     });
 

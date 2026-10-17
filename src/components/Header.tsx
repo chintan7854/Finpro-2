@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { LanguageCode } from '../types';
 import { NewsNotificationBell } from './news/NewsNotificationBell';
+import { AiProviderSwitcher } from './common/AiProviderSwitcher';
 
 interface HeaderProps {
   onNavigate: (view: string) => void;
@@ -85,6 +86,9 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentView }) => {
                 <strong className="text-slate-900">{subscription.creditsRemaining}</strong> credits
               </span>
             </div>
+
+            {/* Quick AI Provider Switcher (Gemini / OpenAI / Auto) */}
+            <AiProviderSwitcher compact onNavigateToSettings={() => onNavigate('settings')} />
 
             {/* News Notification Bell with unread badge */}
             <NewsNotificationBell onOpenNews={() => onNavigate('finance-news')} />

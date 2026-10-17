@@ -7,6 +7,7 @@ import {
   StoryCtaStrategyId,
   GeneratedStoryResult,
 } from '../types/storyStudio';
+import { getActiveAiPreferences } from '../context/AiEngineContext';
 
 export interface StoryGenerationRequest {
   topicId: StoryFinancialTopicId;
@@ -39,8 +40,9 @@ export async function generateViralStory(
     advisorProfile,
   } = request;
 
-  // 1. Attempt Server-Side Gemini API call with complete profile and settings
+  // 1. Attempt Server-Side API call with complete profile and settings
   try {
+    const aiPref = getActiveAiPreferences();
     const res = await fetch('/api/generate-story', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -55,6 +57,9 @@ export async function generateViralStory(
         ctaStrategyId,
         ctaTitle,
         language,
+        aiProvider: aiPref.provider,
+        openaiModel: aiPref.openaiModel,
+        geminiModel: aiPref.geminiModel,
         advisorProfile: {
           advisorName: advisorProfile.advisorName,
           designation: advisorProfile.designation,
